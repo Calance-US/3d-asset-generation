@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # API Keys
     OPENAI_API_KEY: str
     ANTHROPIC_API_KEY: str | None = None
+    GOOGLE_API_KEY: str | None = None
     
     # Model Repository Settings
     SKETCHFAB_API_KEY: str = os.getenv("SKETCHFAB_API_KEY", "")
@@ -24,6 +25,7 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-3.5-turbo"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:32b"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
     
     # Generation Settings
     TEMPERATURE: float = 0.7

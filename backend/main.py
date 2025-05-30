@@ -14,6 +14,8 @@ from dotenv import load_dotenv
 import openai
 import json
 from datetime import datetime
+import google.generativeai as genai
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
 from app.services.prompt_selector import PromptSelector
 from app.services.model_repository import ModelRepository
@@ -50,6 +52,14 @@ if settings.OPENAI_API_KEY:
 else:
     client = None
     logger.warning("OpenAI API key not found. OpenAI provider will not be available.")
+
+# Initialize Google Gemini client if API key is available
+if settings.GOOGLE_API_KEY:
+    genai.configure(api_key=settings.GOOGLE_API_KEY)
+    gemini_model = genai.GenerativeModel(settings.GEMINI_MODEL)
+else:
+    gemini_model = None
+    logger.warning("Google API key not found. Gemini provider will not be available.")
 
 # Request schema
 class GenerateRequest(BaseModel):
@@ -149,6 +159,56 @@ async def generate_with_ollama(topic: str, subject: str) -> str:
                 return html_content
     except Exception as e:
         logger.error(f"Error generating with Ollama: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def generate_with_gemini(topic: str, subject: str) -> str:
+    """Generate visualization using Google Gemini."""
+    try:
+        if not gemini_model:
+            raise HTTPException(status_code=400, detail="Google API key not configured")
+        
+        # Get the appropriate prompt using select_prompt and get_prompt_content
+        selected_subject, filename = prompt_selector.select_prompt(topic, subject)
+        prompt_content = prompt_selector.get_prompt_content(selected_subject, filename, topic)
+        logger.info(f"Using prompt for topic: {topic}, subject: {subject}, file: {filename}")
+        
+        # Generate using Gemini
+        logger.info(f"Generating with Gemini model: {settings.GEMINI_MODEL}")
+        try:
+            response = gemini_model.generate_content(
+                f"{SYSTEM_PROMPT}\n\n{prompt_content}",
+                safety_settings={
+                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+                }
+            )
+            
+            if not response or not response.text:
+                raise HTTPException(status_code=500, detail="Empty response from Gemini API")
+            
+            generated_text = response.text
+            logger.info("Received response from Gemini")
+            
+        except Exception as api_error:
+            logger.error(f"Gemini API error: {str(api_error)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error from Gemini API: {str(api_error)}. Please check if the model name '{settings.GEMINI_MODEL}' is correct and available."
+            )
+        
+        # Parse the HTML content
+        html_content = parse_html_content(generated_text)
+        if not html_content:
+            logger.error("Failed to parse HTML content from Gemini response")
+            raise HTTPException(status_code=500, detail="Failed to generate valid HTML content")
+        
+        return html_content
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating with Gemini: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def parse_html_content(text: str) -> Optional[str]:
@@ -258,6 +318,21 @@ async def generate_visualization(request: GenerateRequest):
             
         elif request.provider == "ollama":
             html_content = await generate_with_ollama(request.topic, request.subject)
+            
+            # Save to history
+            history_entry = {
+                "id": str(datetime.now().timestamp()),
+                "prompt": request.topic,  # Save just the user's prompt
+                "provider": request.provider,
+                "html": html_content,
+                "timestamp": datetime.now().isoformat()
+            }
+            save_history(history_entry)
+            
+            return {"html": html_content}
+            
+        elif request.provider == "gemini":
+            html_content = await generate_with_gemini(request.topic, request.subject)
             
             # Save to history
             history_entry = {
