@@ -127,13 +127,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">3D Concept Visualizer</h1>
+          <h1 className="text-3xl font-bold text-white">3D Concept Visualizer</h1>
           <button
             onClick={() => setShowHistory(!showHistory)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
           >
             {showHistory ? "Hide History" : "Show History"}
           </button>
@@ -143,34 +143,34 @@ export default function App() {
           {/* History Panel */}
           {showHistory && (
             <div className="lg:col-span-1">
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Generation History</h2>
+              <div className="bg-gray-800 shadow rounded-lg p-6">
+                <h2 className="text-lg font-medium text-white mb-4">Generation History</h2>
                 <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
                   {history.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">No history available</p>
+                    <p className="text-gray-400 text-center py-4">No history available</p>
                   ) : (
                     history.map((entry) => (
                       <div
                         key={entry.id}
                         onClick={() => loadHistoryEntry(entry.id)}
-                        className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors duration-150"
+                        className="p-4 border border-gray-700 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors duration-150"
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <p className="text-sm text-gray-600">
+                            <p className="text-sm text-gray-300">
                               {entry.prompt}
                             </p>
-                            <p className="text-xs text-gray-500 mt-2">
+                            <p className="text-xs text-gray-400 mt-2">
                               {new Date(entry.timestamp).toLocaleString()}
                             </p>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-200">
                               {entry.provider}
                             </span>
                             <button
                               onClick={(e) => handleDownload(entry, e)}
-                              className="p-1 text-gray-400 hover:text-green-500 focus:outline-none"
+                              className="p-1 text-gray-400 hover:text-green-400 focus:outline-none"
                               title="Download HTML"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -179,7 +179,7 @@ export default function App() {
                             </button>
                             <button
                               onClick={(e) => handleDeleteEntry(entry.id, e)}
-                              className="p-1 text-gray-400 hover:text-red-500 focus:outline-none"
+                              className="p-1 text-gray-400 hover:text-red-400 focus:outline-none"
                               title="Delete entry"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -198,29 +198,29 @@ export default function App() {
 
           {/* Main Content */}
           <div className={`${showHistory ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className="bg-gray-800 shadow rounded-lg p-6">
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-300">
                     Enter Concept Prompt
                   </label>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
                     rows={4}
                     placeholder="e.g., 'Explain Ohm's Law using a 3D electric circuit'"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-300">
                     Choose AI Provider
                   </label>
                   <select
                     value={provider}
                     onChange={(e) => setProvider(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
                   >
                     <option value="openai">OpenAI (GPT-4)</option>
                     <option value="ollama">Ollama (local)</option>
@@ -229,13 +229,13 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-300">
                     Choose Subject
                   </label>
                   <select
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
                   >
                     <option value="physics">Physics</option>
                     <option value="chemistry">Chemistry</option>
@@ -248,7 +248,7 @@ export default function App() {
                   <button
                     onClick={handleGenerate}
                     disabled={loading}
-                    className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                    className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${
                       loading ? 'opacity-50 cursor-not-allowed' : ''
                     }`}
                   >
@@ -257,18 +257,18 @@ export default function App() {
 
                   <button
                     onClick={handleReset}
-                    className="flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    className="flex justify-center py-2 px-4 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
                   >
                     Reset
                   </button>
                 </div>
 
                 {error && (
-                  <div className="rounded-md bg-red-50 p-4">
+                  <div className="rounded-md bg-red-900/50 p-4">
                     <div className="flex">
                       <div className="ml-3">
-                        <h3 className="text-sm font-medium text-red-800">Error</h3>
-                        <div className="mt-2 text-sm text-red-700">{error}</div>
+                        <h3 className="text-sm font-medium text-red-200">Error</h3>
+                        <div className="mt-2 text-sm text-red-300">{error}</div>
                       </div>
                     </div>
                   </div>
@@ -278,10 +278,10 @@ export default function App() {
               {html && (
                 <div className="mt-8">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-medium text-gray-900">Generated Visualization</h2>
+                    <h2 className="text-lg font-medium text-white">Generated Visualization</h2>
                     <button
                       onClick={handleFullscreen}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
@@ -289,7 +289,7 @@ export default function App() {
                       Fullscreen
                     </button>
                   </div>
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="border border-gray-700 rounded-lg overflow-hidden">
                     <iframe
                       ref={iframeRef}
                       srcDoc={html}
