@@ -69,9 +69,6 @@ class GenerateRequest(BaseModel):
     modelType: Optional[str] = "generated"
     selectedModel: Optional[str] = None
 
-# Load API keys from environment variables
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-
 # Shared system prompt for all providers
 SYSTEM_PROMPT = """You are a code generation assistant that converts natural language descriptions of educational interactive 3D scenes into standalone embeddable HTML files.
 

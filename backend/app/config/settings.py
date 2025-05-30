@@ -9,7 +9,6 @@ load_dotenv()
 class Settings(BaseSettings):
     # API Keys
     OPENAI_API_KEY: str
-    ANTHROPIC_API_KEY: str | None = None
     GOOGLE_API_KEY: str | None = None
     
     # Model Repository Settings

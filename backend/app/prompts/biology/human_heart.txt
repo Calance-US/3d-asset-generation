@@ -1,0 +1,117 @@
+Create an interactive 3D visualization using Three.js that demonstrates Human Anatomy. The visualization must be educational and aanatomically accurate.
+
+## 📥 Import and Module Loading
+
+1. In your HTML `<head>`, include a `<script type="module">` block for ES6 imports:
+
+   ```html
+   <script type="module">
+     import * as THREE from 'https://esm.sh/three@0.155.0';
+     import { OrbitControls } from 'https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls';
+     // Additional imports if needed
+   </script>
+   ```
+2. Ensure `type="module"` so that browsers load these as ES modules.
+3. No other external scripts or build steps—this must run standalone in modern browsers.
+
+## 🎯 Educational Requirements
+
+**TOPIC:** Human Heart - Anatomy
+**LEVEL:** CBSE Class 11–12 (Biology – Anatomy)
+
+---
+
+## 🎯 Educational Goal
+
+Build a **3D, interactive, rotatable, embeddable HTML visualization** to demonstrate Human Heart. The scene must:
+
+* Clearly depict anatomically correct human heart.
+* Animate to show Blood flow.
+* Be **explorable from all angles** via camera controls.
+* Be grounded in real-world physical detail and lighting.
+
+---
+
+## 🧩 Scene Composition
+
+Include the following components arranged in a realistic 3D configuration (not just flat on a plane):
+
+* **Heart**: Realistic Human Heart as a 3D Mesh with Animations.
+* **Arteries**: Depicting blood flow to and from the heart.
+* **Blood Flow Indicators**: Glowing arrows that follow the blood path.
+* **Optional**: Ground plane (e.g., a lab bench), ambient classroom elements.
+
+---
+
+## 🖼️ Visual Design
+
+### 🛠 Materials (`THREE.MeshStandardMaterial`)
+
+* **Heart**: `{ color: 0x000000, metalness: 1.0, roughness: 0.25 }`
+* **Arteries**: `{ color: 0x711518, metalness: 0.0, roughness: 0.75 }`
+* **Blood flow indicators**: `{ color: 0xb87333, metalness: 1.0, roughness: 0.3 }`
+
+### 💡 Lighting
+
+* **Hemisphere Light**: `new THREE.HemisphereLight(0xffffff, 0x444444, 0.8)`
+* **Ambient Light**: `new THREE.AmbientLight(0xffffff, 0.2)`
+* **Directional Light (Key Light)**:
+
+  ```js
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  ```
+
+### ⚙️ Renderer Settings
+
+```js
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+```
+
+Ensure you append `renderer.domElement` to `document.body` and handle resizing.
+
+---
+
+## 🔄 Interactivity & Animation
+
+* **Camera Controls**: Use `OrbitControls` imported above to allow **rotation**, **zoom**, and **pan**.
+* **Animation Toggle**: Toggle animation ON/OFF to Start/Stop Blood flow via mouse click on the switch mesh (use `Raycaster`).
+* **Blood Flow**:
+
+  * Animate glowing particles along `THREE.CatmullRomCurve3` paths connecting components.
+  * Example path setup:
+
+    ```js
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-3.6, 0.3, 0),
+      new THREE.Vector3(3.6, 0.3, 0)
+    ]);
+    ```
+  * In your animation loop, update each blood cell’s position:
+
+    ```js
+    const t = (elapsed * speed + offset) % 1;
+    cell.position.copy(curve.getPoint(t));
+    ```
+
+---
+
+## 📦 Output Requirements
+
+1. **Standalone HTML** with:
+
+   * Correct `<head>`, `<body>`, and `<style>` sections.
+   * A single `<script type="module">` for all imports and logic.
+   * Responsive design: update camera.aspect and renderer size on `window.resize`.
+   * Error handling for missing textures or failed imports.
+2. **Embedding Support**:
+
+   * Works when injected into an `<iframe>`.
+   * Adapts to container dimensions.
+
+Return only the complete HTML code with embedded Three.js ES6 imports. Do not include any explanations or markdown formatting.
