@@ -1,0 +1,572 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Boyle's Law 3D Simulation</title>
+  <style>
+    html, body {
+      margin: 0; height: 100%; width: 100%; overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #121212;
+      color: #eee;
+      user-select: none;
+    }
+    #container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+    }
+    #uiPanel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(20,20,20,0.85);
+      padding: 14px 18px;
+      border-radius: 8px;
+      width: 280px;
+      box-shadow: 0 0 10px #00ffffaa;
+      user-select: none;
+      z-index: 10;
+    }
+    #uiPanel h2 {
+      margin: 0 0 12px 0;
+      font-weight: 700;
+      font-size: 1.3rem;
+      color: #00ffff;
+      text-align: center;
+      letter-spacing: 1px;
+    }
+    #uiPanel label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #88ffff;
+    }
+    #pistonSlider {
+      width: 100%;
+    }
+    #pressureVolume {
+      margin-top: 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #00ffff;
+      text-align: center;
+      letter-spacing: 0.6px;
+    }
+    #buttons {
+      margin-top: 14px;
+      text-align: center;
+    }
+    button {
+      background: #005050;
+      border: none;
+      color: #00ffff;
+      padding: 8px 14px;
+      margin: 0 8px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      user-select: none;
+    }
+    button:hover {
+      background: #009999;
+    }
+    #graphContainer {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(20,20,20,0.85);
+      border-radius: 10px;
+      padding: 12px 14px;
+      width: 320px;
+      height: 180px;
+      box-shadow: 0 0 12px #00ffffaa;
+      user-select: none;
+      z-index: 10;
+    }
+    #graphTitle {
+      color: #00ffff;
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin: 0 0 6px 0;
+      text-align: center;
+    }
+    #graphCanvas {
+      width: 100%;
+      height: 140px;
+      background: #111;
+      border-radius: 6px;
+      box-shadow: inset 0 0 8px #00ffff66;
+    }
+    #labels3d {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+      user-select: none;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #00ffff;
+      font-weight: 700;
+      text-shadow:
+         -1px -1px 0 #000,
+          1px -1px 0 #000,
+         -1px  1px 0 #000,
+          1px  1px 0 #000;
+    }
+  </style>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three@0.155.0';
+    import { OrbitControls } from 'https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls';
+    import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three@0.155.0/examples/jsm/renderers/CSS2DRenderer';
+
+    // Constants and Parameters
+    const CYLINDER_RADIUS = 3;
+    const CYLINDER_HEIGHT_MAX = 8;
+    const CYLINDER_HEIGHT_MIN = 2.5;
+    const PISTON_THICKNESS = 0.3;
+    const GAS_PARTICLE_COUNT = 80;
+    const PARTICLE_RADIUS = 0.08;
+    const CONSTANT_PV = 12; // Arbitrary constant PV = P * V
+    const PARTICLE_SPEED_BASE = 1.2;
+    const PRESSURE_SCALE = 1; // scaling factor for pressure display
+    const VOLUME_UNIT_SCALE = 1; // to convert volume to arbitrary "liters" for display
+
+    // State
+    let pistonHeight = CYLINDER_HEIGHT_MAX; // current piston height (top of cylinder is y=0)
+    let pistonTargetHeight = pistonHeight;
+    let autoMode = false;
+    let autoDirectionDown = true;
+    let lastTime = 0;
+    let collisionCount = 0;
+
+    const container = document.getElementById('container');
+    // Scene Setup
+    const scene = new THREE.Scene();
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+    camera.position.set(8, 7, 10);
+    camera.lookAt(0, CYLINDER_HEIGHT_MAX/2, 0);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    container.appendChild(renderer.domElement);
+
+    // Label Renderer for 2D labels in the 3D scene
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    // Controls
+    const controls = new OrbitControls(camera, labelRenderer.domElement);
+    controls.minDistance = 5;
+    controls.maxDistance = 30;
+    controls.target.set(0, CYLINDER_HEIGHT_MAX/2, 0);
+    controls.update();
+
+    // Lights
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+    scene.add(hemiLight);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
+    dirLight.position.set(5, 10, 7);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.set(2048, 2048);
+    dirLight.shadow.camera.near = 1;
+    dirLight.shadow.camera.far = 20;
+    dirLight.shadow.camera.left = -10;
+    dirLight.shadow.camera.right = 10;
+    dirLight.shadow.camera.top = 10;
+    dirLight.shadow.camera.bottom = -10;
+    scene.add(dirLight);
+
+    // Floor to catch shadows (invisible but receives shadows)
+    const floorGeo = new THREE.PlaneGeometry(30,30);
+    const floorMat = new THREE.ShadowMaterial({ opacity: 0.15 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI/2;
+    floor.position.y = 0;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Cylinder (Gas Chamber) - transparent
+    const cylinderGeo = new THREE.CylinderGeometry(CYLINDER_RADIUS, CYLINDER_RADIUS, CYLINDER_HEIGHT_MAX, 64, 1, true);
+    const cylinderMat = new THREE.MeshPhysicalMaterial({
+      transparent: true,
+      opacity: 0.18,
+      roughness: 0.1,
+      metalness: 0,
+      clearcoat: 1,
+      clearcoatRoughness: 0.1,
+      transmission: 0.85,
+      thickness: 0.3,
+      side: THREE.DoubleSide,
+      color: 0x0088bb,
+      envMapIntensity: 0.5
+    });
+    const cylinder = new THREE.Mesh(cylinderGeo, cylinderMat);
+    cylinder.position.y = CYLINDER_HEIGHT_MAX/2;
+    scene.add(cylinder);
+
+    // Cylinder base (solid bottom)
+    const baseGeo = new THREE.CircleGeometry(CYLINDER_RADIUS, 64);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x004455,
+      metalness: 0.5,
+      roughness: 0.3
+    });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.rotation.x = -Math.PI/2;
+    base.position.y = 0;
+    base.receiveShadow = true;
+    scene.add(base);
+
+    // Piston (Metal/rubber disc) - moves along Y
+    const pistonGeo = new THREE.CylinderGeometry(CYLINDER_RADIUS * 1.02, CYLINDER_RADIUS * 1.02, PISTON_THICKNESS, 64);
+    const pistonMat = new THREE.MeshStandardMaterial({
+      color: 0x888888,
+      metalness: 0.7,
+      roughness: 0.2
+    });
+    const piston = new THREE.Mesh(pistonGeo, pistonMat);
+    piston.position.y = pistonHeight + PISTON_THICKNESS/2;
+    piston.castShadow = true;
+    scene.add(piston);
+
+    // Piston label
+    const pistonLabelDiv = document.createElement('div');
+    pistonLabelDiv.className = 'label3d';
+    pistonLabelDiv.textContent = 'Piston';
+    pistonLabelDiv.style.fontSize = '1.2rem';
+    const pistonLabel = new CSS2DObject(pistonLabelDiv);
+    pistonLabel.position.set(0, PISTON_THICKNESS/2 + 0.1, 0);
+    piston.add(pistonLabel);
+
+    // Cylinder label
+    const chamberLabelDiv = document.createElement('div');
+    chamberLabelDiv.className = 'label3d';
+    chamberLabelDiv.textContent = 'Gas Chamber';
+    chamberLabelDiv.style.fontSize = '1.3rem';
+    const chamberLabel = new CSS2DObject(chamberLabelDiv);
+    chamberLabel.position.set(0, CYLINDER_HEIGHT_MAX/2 + 0.1, CYLINDER_RADIUS + 0.15);
+    scene.add(chamberLabel);
+
+    // Arrow helper for force on piston (upwards arrow)
+    const arrowLength = 1.5;
+    const arrowDir = new THREE.Vector3(0, 1, 0);
+    const arrowOrigin = new THREE.Vector3(0, pistonHeight + PISTON_THICKNESS + 0.1, 0);
+    const forceArrow = new THREE.ArrowHelper(arrowDir, arrowOrigin, arrowLength, 0x00ffff, 0.4, 0.3);
+    scene.add(forceArrow);
+
+    // Arrow label for force
+    const forceLabelDiv = document.createElement('div');
+    forceLabelDiv.className = 'label3d';
+    forceLabelDiv.textContent = 'Force on piston (Pressure)';
+    forceLabelDiv.style.fontSize = '1rem';
+    const forceLabel = new CSS2DObject(forceLabelDiv);
+    forceLabel.position.copy(arrowOrigin.clone().add(new THREE.Vector3(0, arrowLength + 0.1, 0)));
+    scene.add(forceLabel);
+
+    // Gas particles group
+    const gasParticles = [];
+    const particleMat = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 1.5,
+      metalness: 0.1,
+      roughness: 0.4
+    });
+    const particleGeo = new THREE.SphereGeometry(PARTICLE_RADIUS, 16, 16);
+
+    for (let i = 0; i < GAS_PARTICLE_COUNT; i++) {
+      const mesh = new THREE.Mesh(particleGeo, particleMat);
+      mesh.castShadow = true;
+      mesh.position.set(
+        (Math.random()*2 -1) * (CYLINDER_RADIUS - PARTICLE_RADIUS*1.5),
+        Math.random() * (pistonHeight - PARTICLE_RADIUS*2) + PARTICLE_RADIUS*1.5,
+        (Math.random()*2 -1) * (CYLINDER_RADIUS - PARTICLE_RADIUS*1.5)
+      );
+      const velocity = new THREE.Vector3(
+        (Math.random()*2 -1),
+        (Math.random()*2 -1),
+        (Math.random()*2 -1)
+      ).normalize().multiplyScalar(PARTICLE_SPEED_BASE);
+      gasParticles.push({ mesh, velocity });
+      scene.add(mesh);
+    }
+
+    // Gas Particles Label
+    const particlesLabelDiv = document.createElement('div');
+    particlesLabelDiv.className = 'label3d';
+    particlesLabelDiv.textContent = 'Gas Particles';
+    particlesLabelDiv.style.fontSize = '1.3rem';
+    const particlesLabel = new CSS2DObject(particlesLabelDiv);
+    particlesLabel.position.set(CYLINDER_RADIUS + 0.15, CYLINDER_HEIGHT_MAX/2, 0);
+    scene.add(particlesLabel);
+
+    // UI Elements
+    const uiPanel = document.createElement('div');
+    uiPanel.id = 'uiPanel';
+    uiPanel.innerHTML = `
+      <h2>Boyle's Law Simulator</h2>
+      <label for="pistonSlider">Piston Position (Volume)</label>
+      <input type="range" id="pistonSlider" min="${CYLINDER_HEIGHT_MIN}" max="${CYLINDER_HEIGHT_MAX}" step="0.01" value="${pistonHeight}" />
+      <div id="pressureVolume">Pressure: -- atm<br />Volume: -- L</div>
+      <div id="buttons">
+        <button id="resetBtn" title="Reset piston to maximum height">Reset</button>
+        <button id="autoModeBtn" title="Toggle automatic piston movement">Auto Mode: Off</button>
+      </div>
+    `;
+    container.appendChild(uiPanel);
+
+    const pistonSlider = uiPanel.querySelector('#pistonSlider');
+    const pressureVolumeLabel = uiPanel.querySelector('#pressureVolume');
+    const resetBtn = uiPanel.querySelector('#resetBtn');
+    const autoModeBtn = uiPanel.querySelector('#autoModeBtn');
+
+    pistonSlider.addEventListener('input', e => {
+      pistonTargetHeight = parseFloat(e.target.value);
+      autoMode = false;
+      autoModeBtn.textContent = 'Auto Mode: Off';
+    });
+
+    resetBtn.addEventListener('click', () => {
+      pistonTargetHeight = CYLINDER_HEIGHT_MAX;
+      pistonSlider.value = CYLINDER_HEIGHT_MAX.toFixed(2);
+      autoMode = false;
+      autoModeBtn.textContent = 'Auto Mode: Off';
+    });
+
+    autoModeBtn.addEventListener('click', () => {
+      autoMode = !autoMode;
+      autoModeBtn.textContent = autoMode ? 'Auto Mode: On' : 'Auto Mode: Off';
+    });
+
+    // Graph setup
+    const graphContainer = document.createElement('div');
+    graphContainer.id = 'graphContainer';
+    graphContainer.innerHTML = `
+      <div id="graphTitle">Pressure vs Volume</div>
+      <canvas id="graphCanvas" width="320" height="140"></canvas>
+    `;
+    container.appendChild(graphContainer);
+
+    const graphCanvas = graphContainer.querySelector('#graphCanvas');
+    const graphCtx = graphCanvas.getContext('2d');
+    const graphData = [];
+
+    function drawGraph() {
+      graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+      const grad = graphCtx.createLinearGradient(0, 0, 0, graphCanvas.height);
+      grad.addColorStop(0, '#002222');
+      grad.addColorStop(1, '#000000');
+      graphCtx.fillStyle = grad;
+      graphCtx.fillRect(0, 0, graphCanvas.width, graphCanvas.height);
+
+      graphCtx.strokeStyle = '#00ffffcc';
+      graphCtx.lineWidth = 1.5;
+      graphCtx.beginPath();
+      graphCtx.moveTo(40, 5);
+      graphCtx.lineTo(40, graphCanvas.height - 25);
+      graphCtx.lineTo(graphCanvas.width - 10, graphCanvas.height - 25);
+      graphCtx.stroke();
+
+      graphCtx.fillStyle = '#00ffff';
+      graphCtx.font = '12px Segoe UI, Tahoma, Geneva, Verdana, sans-serif';
+      graphCtx.textAlign = 'center';
+      graphCtx.fillText('Volume (L)', graphCanvas.width / 2 + 20, graphCanvas.height - 5);
+      graphCtx.save();
+      graphCtx.translate(12, graphCanvas.height / 2);
+      graphCtx.rotate(-Math.PI / 2);
+      graphCtx.fillText('Pressure (atm)', 0, 0);
+      graphCtx.restore();
+
+      if (graphData.length < 2) return;
+
+      const volumes = graphData.map(pv => pv.v);
+      const pressures = graphData.map(pv => pv.p);
+      const vMin = Math.min(...volumes);
+      const vMax = Math.max(...volumes);
+      const pMin = Math.min(...pressures);
+      const pMax = Math.max(...pressures);
+
+      const graphWidth = graphCanvas.width - 60;
+      const graphHeight = graphCanvas.height - 40;
+
+      function scaleX(v) {
+        return 40 + ((v - vMin) / (vMax - vMin || 1)) * graphWidth;
+      }
+      function scaleY(p) {
+        return graphCanvas.height - 25 - ((p - pMin) / (pMax - pMin || 1)) * graphHeight;
+      }
+
+      graphCtx.strokeStyle = '#00ffff';
+      graphCtx.lineWidth = 2;
+      graphCtx.beginPath();
+      for (let i = 0; i < graphData.length; i++) {
+        const { p, v } = graphData[i];
+        const x = scaleX(v);
+        const y = scaleY(p);
+        if (i === 0) graphCtx.moveTo(x, y);
+        else graphCtx.lineTo(x, y);
+      }
+      graphCtx.stroke();
+
+      graphCtx.fillStyle = '#00ffff';
+      graphData.forEach(({p,v}) => {
+        const x = scaleX(v);
+        const y = scaleY(p);
+        graphCtx.beginPath();
+        graphCtx.arc(x, y, 3, 0, Math.PI*2);
+        graphCtx.fill();
+      });
+
+      graphCtx.fillStyle = '#00ffffbb';
+      graphCtx.font = '10px Segoe UI, Tahoma, Geneva, Verdana, sans-serif';
+      graphCtx.textAlign = 'right';
+      graphCtx.fillText(vMin.toFixed(2), 40, graphCanvas.height - 10);
+      graphCtx.textAlign = 'left';
+      graphCtx.fillText(vMax.toFixed(2), graphCanvas.width - 10, graphCanvas.height - 10);
+      graphCtx.textAlign = 'center';
+      graphCtx.fillText(pMax.toFixed(2), 30, 20);
+      graphCtx.fillText(pMin.toFixed(2), 30, graphCanvas.height - 30);
+    }
+
+    function reflectVelocity(velocity, normal) {
+      const dot = velocity.dot(normal);
+      return velocity.clone().addScaledVector(normal, -2 * dot);
+    }
+
+    function clampPistonHeight(h) {
+      return Math.min(CYLINDER_HEIGHT_MAX, Math.max(CYLINDER_HEIGHT_MIN, h));
+    }
+
+    function animate(time = 0) {
+      requestAnimationFrame(animate);
+      const delta = (time - lastTime) / 1000 || 0.016;
+      lastTime = time;
+
+      if (autoMode) {
+        const speed = 1.7;
+        if (autoDirectionDown) {
+          pistonTargetHeight -= speed * delta;
+          if (pistonTargetHeight <= CYLINDER_HEIGHT_MIN) {
+            pistonTargetHeight = CYLINDER_HEIGHT_MIN;
+            autoDirectionDown = false;
+          }
+        } else {
+          pistonTargetHeight += speed * delta;
+          if (pistonTargetHeight >= CYLINDER_HEIGHT_MAX) {
+            pistonTargetHeight = CYLINDER_HEIGHT_MAX;
+            autoDirectionDown = true;
+          }
+        }
+        pistonSlider.value = pistonTargetHeight.toFixed(3);
+      }
+
+      const moveSpeed = 5;
+      const diff = pistonTargetHeight - pistonHeight;
+      if (Math.abs(diff) > 0.001) {
+        pistonHeight += Math.sign(diff) * Math.min(moveSpeed * delta, Math.abs(diff));
+        pistonHeight = clampPistonHeight(pistonHeight);
+      }
+      piston.position.y = pistonHeight + PISTON_THICKNESS/2;
+
+      arrowOrigin.set(0, pistonHeight + PISTON_THICKNESS + 0.1, 0);
+      forceArrow.position.copy(arrowOrigin);
+      forceLabel.position.copy(arrowOrigin.clone().add(new THREE.Vector3(0, arrowLength + 0.1, 0)));
+
+      const scaleYVal = pistonHeight / CYLINDER_HEIGHT_MAX;
+      cylinder.scale.y = scaleYVal;
+      cylinder.position.y = pistonHeight / 2;
+
+      collisionCount = 0;
+      const radiusLimit = CYLINDER_RADIUS - PARTICLE_RADIUS;
+      const floorY = PARTICLE_RADIUS;
+      const ceilingY = pistonHeight - PARTICLE_RADIUS;
+      const speedMultiplier = pistonHeight / CYLINDER_HEIGHT_MAX;
+      const particleSpeed = PARTICLE_SPEED_BASE / speedMultiplier;
+
+      for (const p of gasParticles) {
+        p.velocity.setLength(particleSpeed);
+        p.mesh.position.addScaledVector(p.velocity, delta);
+        const pos = p.mesh.position;
+        const distXZ = Math.hypot(pos.x, pos.z);
+
+        if (distXZ > radiusLimit) {
+          const normal = new THREE.Vector3(pos.x, 0, pos.z).normalize();
+          p.velocity.copy(reflectVelocity(p.velocity, normal));
+          const overlap = distXZ - radiusLimit;
+          p.mesh.position.addScaledVector(normal, -overlap);
+          collisionCount++;
+        }
+
+        if (pos.y < floorY) {
+          p.velocity.y = Math.abs(p.velocity.y);
+          pos.y = floorY;
+          collisionCount++;
+        }
+        if (pos.y > ceilingY) {
+          p.velocity.y = -Math.abs(p.velocity.y);
+          pos.y = ceilingY;
+          collisionCount++;
+        }
+      }
+
+      const volumeRaw = Math.PI * CYLINDER_RADIUS * CYLINDER_RADIUS * pistonHeight;
+      const volume = volumeRaw * VOLUME_UNIT_SCALE;
+      const pressure = CONSTANT_PV / volumeRaw * PRESSURE_SCALE;
+
+      pressureVolumeLabel.innerHTML = `
+        Pressure: <span style="color:#00ffff;">${pressure.toFixed(2)}</span> atm<br />
+        Volume: <span style="color:#00ffff;">${volume.toFixed(2)}</span> L
+      `;
+
+      const arrowLenVal = THREE.MathUtils.clamp(pressure * 0.6, 0.6, 2.7);
+      forceArrow.setLength(arrowLenVal, 0.4, 0.3);
+      const arrowColor = new THREE.Color().setHSL(0.5, 1, THREE.MathUtils.clamp(0.3 + pressure/10, 0.3, 0.7));
+      forceArrow.setColor(arrowColor);
+
+      if (graphData.length === 0 || Math.abs(graphData[graphData.length - 1].v - volume) > 0.01) {
+        graphData.push({ p: pressure, v: volume });
+        if (graphData.length > 120) graphData.shift();
+      }
+      drawGraph();
+
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    });
+  </script>
+</head>
+<body>
+  <div id="container"></div>
+</body>
+</html>

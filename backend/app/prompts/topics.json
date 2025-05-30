@@ -1,0 +1,44 @@
+[
+  {
+    "title": "Ohm's Law",
+    "subject": "physics",
+    "class": "10",
+    "file": "ohms_law.txt"
+  },
+  {
+    "title": "Atomic Structure",
+    "subject": "chemistry",
+    "class": "9",
+    "file": "atomic_structure.txt"
+  },
+  {
+    "title": "Human Heart",
+    "subject": "biology",
+    "class": "10",
+    "file": "human_heart.txt"
+  },
+  {
+    "title": "Pulley Systems",
+    "subject": "physics",
+    "class": "8",
+    "file": "pulley_systems.txt"
+  },
+  {
+    "title": "Chemical Bonding",
+    "subject": "chemistry",
+    "class": "10",
+    "file": "chemical_bonding.txt"
+  },
+  {
+    "title": "Boyle's Gas Laws",
+    "subject": "chemistry",
+    "class": "10",
+    "file": "boyles_law.txt"
+  },
+  {
+    "title": "Cell Structure",
+    "subject": "biology",
+    "class": "9",
+    "file": "cell_structure.txt"
+  }
+] 

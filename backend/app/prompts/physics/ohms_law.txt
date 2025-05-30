@@ -1,0 +1,121 @@
+Create an interactive 3D visualization using Three.js that demonstrates Ohm's Law (V = IR) in a closed electric circuit. The visualization must be educational, scientifically accurate, and clearly demonstrate the relationship between voltage, current, and resistance.
+
+## 📥 Import and Module Loading
+
+1. In your HTML `<head>`, include a `<script type="module">` block for ES6 imports:
+
+   ```html
+   <script type="module">
+     import * as THREE from 'https://esm.sh/three@0.155.0';
+     import { OrbitControls } from 'https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls';
+     // Additional imports if needed
+   </script>
+   ```
+2. Ensure `type="module"` so that browsers load these as ES modules.
+3. No other external scripts or build steps—this must run standalone in modern browsers.
+
+## 🎯 Educational Requirements
+
+**TOPIC:** Ohm’s Law (V = IR)
+**LEVEL:** CBSE Class 9–10 (Physics – Electricity)
+
+---
+
+## 🎯 Educational Goal
+
+Build a **3D, interactive, rotatable, embeddable HTML visualization** to demonstrate Ohm's Law using a **closed electric circuit**. The scene must:
+
+* Clearly depict voltage, current, and resistance.
+* Allow toggling the switch to start/stop electron flow.
+* Be **explorable from all angles** via camera controls.
+* Be grounded in real-world physical detail and lighting.
+
+---
+
+## 🧩 Scene Composition
+
+Include the following components arranged in a realistic 3D configuration (not just flat on a plane):
+
+* **Battery**: 5V, cylindrical with metallic texture and polarity indicators.
+* **Resistor**: 10Ω, wire-wound ceramic body with proper color bands (`brown-black-black-gold`).
+* **Switch**: Rocker or lever switch placed visibly in the circuit.
+* **Wires**: Braided copper, spatially arranged with slight height differences for depth.
+* **Electron Flow Indicators**: Glowing spheres or arrows that follow the current path.
+* **Optional**: Ground plane (e.g., a lab bench), ambient classroom elements.
+
+---
+
+## 🖼️ Visual Design
+
+### 🛠 Materials (`THREE.MeshStandardMaterial`)
+
+* **Battery**: `{ color: 0x333333, metalness: 1.0, roughness: 0.25 }`
+* **Resistor**: `{ color: 0xD2B48C, metalness: 0.0, roughness: 0.75 }`
+* **Wires**: `{ color: 0xb87333, metalness: 1.0, roughness: 0.3 }`
+* **Switch**: `{ color: 0x4A3B31, metalness: 0.05, roughness: 0.45 }`
+* **Electron Particles**: `{ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2, metalness: 0.1, roughness: 0.4 }`
+
+### 💡 Lighting
+
+* **Hemisphere Light**: `new THREE.HemisphereLight(0xffffff, 0x444444, 0.8)`
+* **Ambient Light**: `new THREE.AmbientLight(0xffffff, 0.2)`
+* **Directional Light (Key Light)**:
+
+  ```js
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(2048, 2048);
+  ```
+
+### ⚙️ Renderer Settings
+
+```js
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+```
+
+Ensure you append `renderer.domElement` to `document.body` and handle resizing.
+
+---
+
+## 🔄 Interactivity & Animation
+
+* **Camera Controls**: Use `OrbitControls` imported above to allow **rotation**, **zoom**, and **pan**.
+* **Switch Toggle**: Toggle circuit ON/OFF via mouse click on the switch mesh (use `Raycaster`).
+* **Electron Flow**:
+
+  * Animate glowing particles along `THREE.CatmullRomCurve3` paths connecting components.
+  * Example path setup:
+
+    ```js
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-3.6, 0.3, 0),
+      new THREE.Vector3(3.6, 0.3, 0)
+    ]);
+    ```
+  * In your animation loop, update each particle’s position:
+
+    ```js
+    const t = (elapsed * speed + offset) % 1;
+    particle.position.copy(curve.getPoint(t));
+    ```
+
+---
+
+## 📦 Output Requirements
+
+1. **Standalone HTML** with:
+
+   * Correct `<head>`, `<body>`, and `<style>` sections.
+   * A single `<script type="module">` for all imports and logic.
+   * Responsive design: update camera.aspect and renderer size on `window.resize`.
+   * Error handling for missing textures or failed imports.
+2. **Embedding Support**:
+
+   * Works when injected into an `<iframe>`.
+   * Adapts to container dimensions.
+
+Return only the complete HTML code with embedded Three.js ES6 imports. Do not include any explanations or markdown formatting.

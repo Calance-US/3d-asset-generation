@@ -1,0 +1,45 @@
+You are a 3D visualization assistant generating educational, interactive, photorealistic scenes for CBSE Physics curriculum.
+
+Topic: Ohm's Law — Explain the relationship V = IR using a 3D visualization.
+
+Requirements:
+1. Build a realistic closed-loop **electric circuit** in 3D.
+2. The circuit must include:
+   - A **5V battery** with positive and negative terminals visibly marked.
+   - A **10Ω cylindrical resistor**, modeled as a wire-wound component with appropriate colors (brown-black-black-gold).
+   - A **toggle switch**, initially in "off" position, visually modeled as a rocker or lever.
+   - **Copper wires** connecting all components in a **series configuration** — NOT aligned in a line but bent into a square/rectangular loop.
+3. Scene must visually represent **Ohm’s Law**:
+   - When the switch is turned on (user clicks), animate **blue glowing spheres** (representing electrons) flowing through the wire.
+   - Optionally show a label or meter displaying live current value: `I = V / R = 0.5 A`.
+
+Realism and Style:
+- Use **PBR Materials**:
+  - Battery: smooth metallic body with slight gloss, black/red caps.
+  - Resistor: matte ceramic body with printed color bands.
+  - Wires: braided copper with subtle specular highlights.
+  - Switch: plastic with slight edge wear, rotate on toggle.
+- Lighting:
+  - One directional light + ambient light.
+  - Shadows enabled. Ground plane slightly reflective.
+- Camera must orbit around the center of the loop.
+- Background: clean gradient or subtle dark color.
+- Controls: use OrbitControls to allow zoom, pan, rotate.
+
+Annotations & Labels:
+- Label each component clearly (e.g., "Battery", "10Ω Resistor").
+- Show animated **arrows** on wires to indicate flow direction.
+
+Output Format:
+- Generate a **single embeddable HTML file**.
+- Use `three@0.155.0` and its extensions (OrbitControls) via esm.sh CDN.
+- The entire code must run in browser directly and be embeddable in an iframe.
+- No external dependencies or build tools.
+
+Visual & Interactive Summary:
+- Interactive switch toggles current flow.
+- Electron flow is visualized via animated spheres/arrows.
+- Photorealistic rendering of each component.
+- Responsive 3D scene with orbit, zoom, and pan.
+
+Generate only the complete HTML code. Do not explain or describe the output.

@@ -1,0 +1,12 @@
+Create an interactive 3D visualization using Three.js that demonstrates {topic} in physics.
+The visualization should be educational and include:
+1. Clear labels and annotations for all physical quantities
+2. Interactive elements to demonstrate cause and effect relationships
+3. Proper lighting and camera controls for 3D exploration
+4. Responsive design that works on all devices
+5. Scientific accuracy in representing physical principles
+6. Visual clarity and intuitive understanding of the concept
+7. Real-time animations to show dynamic behavior
+8. Measurement indicators where applicable
+
+Return only the complete HTML code with embedded Three.js. 

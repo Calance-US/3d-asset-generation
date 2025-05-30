@@ -1,0 +1,103 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+## 🎯 Project Goal
+
+Build a Python-based backend and HTML/JS frontend system that takes an educational topic prompt (e.g., “Visualize Ohm’s Law”) and generates an interactive, realistic 3D HTML visualization using Three.js. Backend may query OpenAI/Ollama models using prompt templates. Visualizations are embeddable via `<iframe>`.
+
+---
+
+## 📁 Directory Structure
+
+```plaintext
+/
+├── frontend/
+│   ├── index.html                # Static page that loads generated iframe
+│   ├── viewer.css                # Styling for iframe
+│   ├── viewer.js                 # Fetch + inject generated HTML
+│
+├── backend/
+│   ├── main.py                   # FastAPI app with /generate endpoint
+│   ├── generator.py              # LLM integration using OpenAI, LangChain, or Ollama
+│   ├── model_fetcher.py          # Fetches 3D assets for scene generation
+│   ├── prompts/
+│   │   └── physics_ohms_law.prompt.txt
+│   │   └── biology_human_heart.prompt.txt
+│   │   └── topics.json
+│   │   └── ...
+│   ├── assembler.py              # Merges model fetch + LLM HTML response
+│   ├── config.py                 # Holds config for LLM provider and prompts
+│
+├── cursorules.mdc               # These instructions
+````
+
+---
+
+## ✅ Implementation Notes
+
+### 🔁 Backend
+
+* Use **FastAPI** with `/generate` endpoint:
+
+  * Input: JSON `{ "topic": "Ohm's Law" }`
+  * Output: JSON `{ "html": "<html>...</html>" }`
+
+* Support **multiple LLMs**:
+
+  * If `config.LLM_PROVIDER == "openai"` → use OpenAI ChatCompletion
+  * If `"ollama"` → send to `http://localhost:11434/api/generate`
+  * Use `langchain.chat_models` if possible for abstraction
+
+* If a `.prompt.txt` file exists in `/prompts/`, use it as the **base prompt template**.
+
+* Append **dynamic content**, such as asset URLs, physics parameters, labels.
+
+### 🧱 Prompt Format
+
+* Each `.prompt.txt` must follow the structured format:
+
+  * Educational Objective
+  * Scene Composition
+  * Visual Style
+  * Annotations + Interaction
+  * Renderer Config (PBR)
+  * Final Packaging (Standalone HTML)
+
+---
+
+## 🪄 Cursor Instructions
+
+* Always **validate HTML output** with `</html>` ending
+* When inserting Three.js CDN, use:
+
+```js
+import * as THREE from 'https://esm.sh/three@0.155.0';
+import { OrbitControls } from 'https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls';
+```
+
+* Always include `OrbitControls` for rotation.
+
+---
+
+## 🧪 Testing Rules
+
+* The output HTML should be embeddable as:
+
+```html
+<iframe srcdoc="...generated html..."></iframe>
+```
+
+* Use `frontend/viewer.js` to dynamically inject iframe based on backend response.
+
+---
+
+## 📦 Asset Fetching Notes
+
+* If asset keywords like "heart", "pulley", or "burette" are detected in topic, call `model_fetcher.fetch_assets(topic: str) → List[str]`
+* Use GLTFLoader or `<model-viewer>` if `.glb` is returned
+* Place all models in `/frontend/assets/`
+
+---

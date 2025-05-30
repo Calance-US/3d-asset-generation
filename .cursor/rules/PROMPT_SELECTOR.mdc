@@ -1,0 +1,106 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 🧠 Cursor Rules – Prompt Selector Component
+
+## 🎯 Component Purpose
+
+The Prompt Selector is responsible for mapping a user’s raw input (educational topic request) to the most suitable pre-authored prompt template that instructs the LLM to generate a realistic 3D visualization.
+
+---
+
+## 🧩 Architecture Role in Strategy 1
+
+- Uses a **semantic classifier (LLM-Basex or sentence-transformers)** to determine the closest matching prompt.
+- Prompts are stored as structured `.prompt.txt` files (one per topic).
+- Also supports **heuristic fallback matching** using normalized keyword lookup.
+
+---
+
+## 📁 Expected Structure
+
+```plaintext
+prompt_selector/
+├── selector.py              # Main module: selects best prompt file
+├── topics.json              # Canonical topic + metadata list
+├── cache.json               # Optional cache for fast mapping
+├── embeddings/
+│   └── *.npy                # Precomputed topic embeddings
+└── cursorules.mdc           # Cursor build rules
+````
+
+---
+
+## 🛠️ Implementation Requirements
+
+### 📌 Step 1: Preprocess Topics
+
+* `topics.json` format:
+
+```json
+[
+  {
+    "title": "Ohm's Law",
+    "subject": "Physics",
+    "class": "10",
+    "file": "physics_ohms_law.prompt.txt"
+  },
+  ...
+]
+```
+
+* Use a **sentence transformer** (e.g., `all-MiniLM-L6-v2`) to embed topic titles.
+* Save all embeddings as `.npy` file → `embeddings/topics.npy`
+
+---
+
+### 📌 Step 2: Selection Logic
+
+`selector.py` must expose a function:
+
+```python
+def select_prompt(user_query: str) -> str:
+    """
+    Given a user query like 'explain how pulleys work in physics',
+    return the best-matching prompt filename: e.g., 'physics_pulley_systems.prompt.txt'
+    """
+```
+
+#### Internals:
+
+* Embed the `user_query`
+* Compare cosine similarity with all topic vectors
+* If top score > 0.75, return that file
+* Else, fallback to keyword-based search on `title.lower() in query`
+
+---
+
+## 🧠 Example Usage
+
+```python
+from prompt_selector.selector import select_prompt
+
+filename = select_prompt("Visualize human heart circulation")
+# → 'biology_human_heart.prompt.txt'
+```
+
+---
+
+## 📦 Cursor Tasks
+
+1. Implement `selector.py` with both semantic + heuristic fallback
+2. Generate and cache embeddings in `embeddings/topics.npy`
+3. Add script to rebuild embeddings from `topics.json`
+
+---
+
+## ✅ Testing Scenarios
+
+| Input Query                          | Expected Output File              |
+| ------------------------------------ | --------------------------------- |
+| "Visualize ohm’s law with animation" | `physics_ohms_law.prompt.txt`     |
+| "Explain titration process"          | `chemistry_titration.prompt.txt`  |
+| "How does heart work"                | `biology_human_heart.prompt.txt`  |
+| "Pressure vs volume law"             | `chemistry_boyles_law.prompt.txt` |

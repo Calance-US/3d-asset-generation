@@ -1,0 +1,150 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+To generate new prompts, use the below template:
+
+Build a **3D, interactive, rotatable, embeddable HTML visualization** to demonstrate Ohm's Law using a **closed electric circuit**. The scene must:
+
+* Clearly depict voltage, current, and resistance.
+* Allow toggling the switch to start/stop electron flow.
+* Be **explorable from all angles** via camera controls.
+* Be grounded in real-world physical detail and lighting.
+
+---
+
+## 🧩 Scene Composition
+
+Include the following components arranged in a realistic 3D configuration (not just flat on a plane):
+
+* **Battery**: 5V, cylindrical with metallic texture and polarity indicators.
+* **Resistor**: 10Ω, wire-wound ceramic body with proper color bands (`brown-black-black-gold`).
+* **Switch**: Rocker or lever switch placed visibly in the circuit.
+* **Wires**: Braided copper, spatially arranged with slight height differences for depth.
+* **Electron Flow Indicators**: Glowing spheres or arrows that follow the current path.
+* **Optional**: Ground plane (e.g., a lab bench), ambient classroom elements.
+
+---
+
+## 🖼️ Visual Design
+
+### 🛠 Materials (`THREE.MeshStandardMaterial`):
+
+* **Battery**:
+
+  ```js
+  { color: 0x333333, metalness: 1.0, roughness: 0.25 }
+  ```
+* **Resistor**:
+
+  ```js
+  { color: 0xD2B48C, metalness: 0.0, roughness: 0.75 }
+  ```
+* **Wires**:
+
+  ```js
+  { color: 0xb87333, metalness: 1.0, roughness: 0.3 }
+  ```
+* **Switch**:
+
+  ```js
+  { color: 0x4A3B31, metalness: 0.05, roughness: 0.45 }
+  ```
+
+### 💡 Lighting
+
+* **Hemisphere Light**:
+
+  ```js
+  new THREE.HemisphereLight(0xffffff, 0x444444, 0.8)
+  ```
+* **Ambient Light**:
+
+  ```js
+  new THREE.AmbientLight(0xffffff, 0.2)
+  ```
+* **Directional Light (Key Light)**:
+
+  ```js
+  const light = new THREE.DirectionalLight(0xffffff, 0.75);
+  light.castShadow = true;
+  light.shadow.mapSize.set(2048, 2048);
+  ```
+
+### ⚙️ Renderer Settings
+
+```js
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+```
+
+---
+
+## 🔄 Interactivity & Animation
+
+* **Camera Controls**: Use `OrbitControls` to allow **rotation**, **zoom**, and **pan** around the 3D circuit:
+
+  ```js
+  import { OrbitControls } from 'https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls';
+  ```
+* **Switch Toggle**: Toggle circuit ON/OFF with mouse click.
+* **Electron Flow**:
+
+  * Animate glowing particles (`0x00ffff`) along `CatmullRomCurve3` paths.
+  * Particle Material:
+
+    ```js
+    new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 2,
+      metalness: 0.1,
+      roughness: 0.4
+    });
+    ```
+
+---
+
+## 🏷️ Annotations
+
+* Label key components: **Battery**, **Resistor**, **Switch**, **Wires**.
+* Use floating 3D text or HTML overlay for annotations.
+* Add **directional force arrows**:
+
+  ```js
+  const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), position, length, 0xff0000);
+  ```
+
+---
+
+## 📦 Packaging Requirements
+
+* Output a **standalone embeddable HTML file**.
+* Use Three.js v0.155.0 from CDN:
+
+  ```js
+  import * as THREE from 'https://esm.sh/three@0.155.0';
+  ```
+* Compatible for embedding using:
+
+  ```html
+  <iframe srcdoc="..."></iframe>
+  ```
+
+---
+
+## 🧪 Optional Enhancements
+
+* Glow effect on resistor when current flows.
+* Label to show real-time calculation: `I = V / R`.
+* Use easing functions for electron movement (`Math.sin(time)` or GSAP if feasible).
+
+---
+
+### 🧾 Output Format
+
+**Do not include explanations, markdown, or descriptions. Only return raw HTML.**

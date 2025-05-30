@@ -1,0 +1,14 @@
+Create an interactive 3D visualization using Three.js that demonstrates {topic} in chemistry.
+The visualization should be educational and include:
+1. Clear labels and annotations for all chemical components
+2. Interactive elements to demonstrate molecular interactions
+3. Proper lighting and camera controls for 3D exploration
+4. Responsive design that works on all devices
+5. Scientific accuracy in representing chemical principles
+6. Visual clarity and intuitive understanding of the concept
+7. Real-time animations to show chemical processes
+8. Molecular structure visualization where applicable
+9. Color coding for different elements
+10. Bond visualization and interaction
+
+Return only the complete HTML code with embedded Three.js. 

@@ -1,0 +1,15 @@
+Create an interactive 3D visualization using Three.js that demonstrates {topic} in biology.
+The visualization should be educational and include:
+1. Clear labels and annotations for all biological structures
+2. Interactive elements to demonstrate biological processes
+3. Proper lighting and camera controls for 3D exploration
+4. Responsive design that works on all devices
+5. Scientific accuracy in representing biological principles
+6. Visual clarity and intuitive understanding of the concept
+7. Real-time animations to show biological processes
+8. Cross-section views where applicable
+9. Scale indicators for microscopic structures
+10. Color coding for different tissue types
+11. Interactive layer controls for complex structures
+
+Return only the complete HTML code with embedded Three.js. 
