@@ -101,6 +101,31 @@ export default function App() {
     }
   }
 
+  async function handleDownload(entry, event) {
+    event.stopPropagation(); // Prevent triggering the parent div's onClick
+    try {
+      // Create a blob from the HTML content
+      const blob = new Blob([entry.html], { type: 'text/html' });
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(blob);
+      // Create a temporary link element
+      const link = document.createElement('a');
+      link.href = url;
+      // Set the filename using the prompt and timestamp
+      const timestamp = new Date(entry.timestamp).toISOString().split('T')[0];
+      const filename = `visualization_${timestamp}_${entry.prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+      link.download = filename;
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Clean up the URL
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Error downloading file: ${err.message}`);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -143,6 +168,15 @@ export default function App() {
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               {entry.provider}
                             </span>
+                            <button
+                              onClick={(e) => handleDownload(entry, e)}
+                              className="p-1 text-gray-400 hover:text-green-500 focus:outline-none"
+                              title="Download HTML"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </button>
                             <button
                               onClick={(e) => handleDeleteEntry(entry.id, e)}
                               className="p-1 text-gray-400 hover:text-red-500 focus:outline-none"
