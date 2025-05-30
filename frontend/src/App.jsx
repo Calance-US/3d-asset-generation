@@ -14,7 +14,7 @@ export default function App() {
   // Load history on component mount
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, []); // Empty dependency array to run only once on mount
 
   // Add fullscreen handler
   const handleFullscreen = () => {
