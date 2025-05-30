@@ -1,0 +1,20 @@
+name: "Close and stale issues/PRs"
+
+on:
+  schedule:
+    - cron: "0 0 */15 * *"
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v8
+        with:
+          stale-issue-message: "This issue is very old. Marking it as stale!"
+          stale-pr-message: "This PR is very old. Marking it as stale!"
+          close-pr-message: "This PR is older than 1 month. Closing it!"
+          days-before-issue-stale: 30
+          days-before-issue-close: -1
+          days-before-pr-stale: 15
+          days-before-pr-close: 15
+          close-pr-label: "Closed"

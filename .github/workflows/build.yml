@@ -1,0 +1,151 @@
+name: CI-CD on Kubernetes Cluster
+on:
+  # Workflow triggers when a tag of given pattern is pushed
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+
+      - v[0-9]+.[0-9]+.[0-9]+
+
+jobs:
+  vulnerability-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code # action to fetch the code from repo.
+        uses: actions/checkout@v3
+      - name: Build an image from Dockerfile # builds the image.
+        run: |
+          docker build -t docker.io/my-organization/my-app:${{ github.sha }} .
+      - name: Run Trivy vulnerability scanner # runs the scanner.
+        uses: aquasecurity/trivy-action@7b7aa264d83dc58691451798b4d117d53d21edfe
+        with:
+          image-ref: docker.io/my-organization/my-app:${{ github.sha }}
+          format: table
+          output: trivy-results.json
+          severity: CRITICAL,HIGH,MEDIUM,LOW
+      - name: Get the scan result as Json format
+        uses: aquasecurity/trivy-action@7b7aa264d83dc58691451798b4d117d53d21edfe
+        with:
+          image-ref: docker.io/my-organization/my-app:${{ github.sha }}
+          format: json
+          output: trivy-results-json-format.json
+          severity: CRITICAL,HIGH
+      - name: Extracting Vulnerability index for Notification
+        run: |
+          python3 -m pip install -U pip
+          pip install prettytable
+          ls -ltrh 
+          python extract_vulnerability.py
+        env:
+          server_address: ${{secrets.SMTP_HOST}}
+          server_port: ${{secrets.SMTP_PORT}}
+          username: ${{secrets.SMTP_USER}}
+          password: ${{secrets.SMTP_PASS}}
+          sender: ${{secrets.SENDER_EMAIL}}
+          repository: ${{github.event.repository.name}}
+          tag: ${{github.ref_name}}
+
+      - name: Upload Trivy scan results as an artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: trivy-results
+          path: ${{ github.workspace }}/trivy-results.json
+      - name: Vulnerability Data as an Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: trivy-vulnerability
+          path: ${{ github.workspace }}/vulnerabilities.json
+      - name: Upload Json formated result
+        uses: actions/upload-artifact@v2
+        with:
+          name: Json Format
+          path: ${{ github.workspace }}/trivy-results-json-format.json
+
+  build-and-push-dockerimages:
+    needs: vulnerability-scan
+    permissions:
+      contents: read
+      packages: write
+    secrets:
+      # Secret for used Image Registry
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.IMAGE_REGISTRY_PASSWORD }}
+
+    uses: Calance-US/calance-workflows/.github/workflows/build.yml@v2.0.0
+    with:
+      # Name for the image that will be built (Defaults to repository name)
+      image_name: service_name
+
+      # Docker Context Path (Defaults to .)
+      docker_context_path: service_name/
+
+      # Path to the Dockerfile (Defaults to ./Dockerfile)
+      dockerfile_path: service_name/Dockerfile
+
+      # Build time environment variables as multiline string for testing environment (Defaults to "")
+      dot_env_file_testing: ""
+
+      # Build time environment variables as multiline string for production environment (Defaults to "")
+      dot_env_file_production: ""
+
+      # Build time environment variables as multiline string for production environment (Defaults to "")
+      dot_env_file_dev: ""
+
+      # Branch that we want to build (Defaults to branch which triggered the workflow)
+      branch_name: ""
+
+      # Image Registry Name (Define it as variable if you are using any registry except GHCR)
+      image_registry: ${{ vars.IMAGE_REGISTRY }}
+
+      # Username of used Image Registry for logging
+      image_registry_username: ${{ vars.IMAGE_REGISTRY_USERNAME }}
+
+  deploy-to-kubernetes:
+    needs: build-and-push-dockerimages
+    permissions:
+      contents: read
+      packages: write
+    uses: Calance-US/calance-workflows/.github/workflows/deploy.yml@v2.0.0
+    with:
+      # Name of the repository
+      repository_name: ${{ github.event.repository.name }}
+
+      # Image Name of Application's Dockerfile
+      image_name: service_name
+
+      # Application version that need to be deployed
+      version: ${{ needs.build-and-push-dockerimages.outputs.version }}
+
+      # Release Name of the Application (Defaults to "${{ github.event.repository.name }}")
+      release_name: service_name
+
+      # Service Name of the Application (Defaults to "${{ github.event.repository.name }}")
+      service_name: service_name
+
+      # Latest Commit id of deployed tag or branch
+      commit_id: ${{ needs.build-and-push-dockerimages.outputs.commit_id }}
+
+      # Cluster environment to deploy your image
+      cluster_environment: ${{ needs.build-and-push-dockerimages.outputs.cluster_environment }}
+
+      # Enable generating namespace value according to the cluster-environment (Defaults to false)
+      env_specific_namespaces: false
+
+      # Image Registry Name (Define it as variable if you are using any registry except GHCR)
+      image_registry: ${{ vars.IMAGE_REGISTRY }}
+
+      # Name of Jenkins Job Name ( For deployment to Nutanix & Atcost Cluster => kubernetes-deploy-on-nutanix && For deployment to Finca Cluster => Finca Deployment )
+      jenkins_job_name: jenkins_job_name
+
+      # Release Tag of current deployment (If you are using deploy.yml@v2.0.0, then release_tag => v2.0.0)
+      release_tag: release_tag
+
+      # Name of repository that has helm values files
+      helm_values_repository: helm_values_repository
+    secrets:
+      # Domain Name of Jenkins
+      JENKINS_URL: ${{ secrets.JENKINS_URL }}
+
+      # Username of Jenkins
+      JENKINS_USER: ${{ secrets.JENKINS_USER }}
+
+      # Token of Jenkins
+      JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}

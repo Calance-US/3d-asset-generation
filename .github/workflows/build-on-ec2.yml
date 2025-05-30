@@ -1,0 +1,119 @@
+name: CI-CD on AWS EC2
+on:
+  # Workflow triggers when a tag of given pattern is pushed
+  push:
+    tags:
+      - v[0-9]+.[0-9]+.[0-9]+-rc[0-9]+
+      - v[0-9]+.[0-9]+.[0-9]+
+
+jobs:
+  build-and-push-dockerimages:
+    permissions:
+      contents: read
+      packages: write
+    secrets:  
+      # Secret for used Image Registry
+      IMAGE_REGISTRY_PASSWORD: ${{ secrets.IMAGE_REGISTRY_PASSWORD }}
+
+    uses: Calance-US/calance-workflows/.github/workflows/build.yml@v2.0.0
+    with:
+      # Name for the image that will be built (Defaults to repository name)
+      image_name: service_name
+
+      # Docker Context Path (Defaults to .)
+      docker_context_path: service_name/
+
+      # Path to the Dockerfile (Defaults to ./Dockerfile)
+      dockerfile_path: service_name/Dockerfile
+
+      # Build time environment variables as multiline string for testing environment (Defaults to "")
+      dot_env_file_testing: ""
+
+      # Build time environment variables as multiline string for production environment (Defaults to "")
+      dot_env_file_production: ""
+
+      # Build time environment variables as multiline string for production environment (Defaults to "")
+      dot_env_file_dev: ""
+
+      # Branch that we want to build (Defaults to branch which triggered the workflow)
+      branch_name: ""
+
+      # Image Registry Name (Define it as variable if you are using any registry except GHCR)
+      image_registry: ${{ vars.IMAGE_REGISTRY }}
+
+      # Username of used Image Registry for logging
+      image_registry_username: ${{ vars.IMAGE_REGISTRY_USERNAME }}
+
+  deploy-to-aws-ec2:
+    needs: build-and-push-dockerimages
+    permissions:
+      contents: read
+      packages: write
+    uses: Calance-US/calance-workflows/.github/workflows/deploy-on-ec2.yml@v2.0.0
+    with:
+        # Name for the image that will be built
+        image_name: service_name
+
+        # Image Registry Name (Define it as variable if you are using any registry except GHCR)
+        image_registry: ${{ vars.IMAGE_REGISTRY }}
+
+        # Credentials ID for pulling image from Image Registry defined in Jenkins Credentials Store
+        credentials_id: ${{ vars.CREDENTIALS_ID }}
+
+        # Service/Repository Name of Application (Defaults to ${{ github.event.repository.name }})
+        service_name: service_name
+
+        # Release Name of Application
+        release_name: release_name
+
+        # Application version that need to be deployed
+        version: ${{ needs.build-and-push-dockerimages.outputs.version }}
+
+        # Cluster environment to deploy your image
+        cluster_environment: ${{ needs.build-and-push-dockerimages.outputs.cluster_environment }}
+
+        # Command that is required to run in the container
+        command: command
+
+        # Port at which service will be running
+        port: port
+
+        # AWS Region Name
+        aws_region: aws_region
+
+        # Docker Network Name
+        docker_network: docker_network
+
+        # Mount Paths (For multiple volume mounts, add a comma seperated string)
+        mount_path: mount_path
+
+        # Enable if container requires GPU
+        enable_gpu: true/false
+
+        # Name of Jenkins Job Name (For deployment of Protocol Scoring Applications => Protocol Scoring Deployment && For deployment of Calance Applications => EC2-Deployment-Dashboard)
+        jenkins_job_name: jenkins_job_name
+
+        # Release Tag (If you are using deploy.yml@v2.0.0, then release_tag => v2.0.0)
+        release_tag: release_tag
+
+        # Logging Driver of Container
+        log_driver: log_driver
+
+        # Log Driver Options (For multiple log driver options, add a comma seperated string)
+        log_driver_options: log_driver_options
+
+    secrets:
+      # Domain Name of Jenkins
+      JENKINS_URL: ${{ secrets.JENKINS_URL }}
+
+      # Username of Jenkins
+      JENKINS_USER: ${{ secrets.JENKINS_USER }}
+
+      # Token of Jenkins
+      JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+
+      # AWS Access Key for the User
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+
+      # AWS Secret Key for the User
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
