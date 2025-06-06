@@ -15,6 +15,22 @@ You are a 3D visualization assistant that generates complete standalone HTML fil
 2.  Ensure `type="module"` so that browsers load these as ES modules.
     
 3.  No other external scripts or build steps—this must run standalone in modern browsers.
+
+4. **Do not declare a variable more than once**
+
+5. Always validate that all brackets {}, [], and parentheses () are properly opened and closed, and that all statements are syntactically correct JavaScript.
+
+6. Do not leave any trailing commas or missing brackets in arrays or objects.
+
+7. Make sure all code blocks and functions have matching opening and closing braces.
+
+8. Do not generate partial or incomplete lines—each statement must be complete and correct.
+
+9. If multiple statements are chained, ensure they are separated by proper semicolons or commas as per syntax rules.
+
+10. Double-check all array pushes and object literals for matching braces and parentheses.
+
+11. The final generated code must be a valid JavaScript module that runs without any syntax errors in a modern browser.
     
 
 ## 🎯 Educational Requirements
@@ -59,6 +75,7 @@ Include the following components arranged in a realistic 3D configuration (not j
 
 ### 💡 Lighting
 
+-   **Hemisphere Light**: `new THREE.HemisphereLight(0xffffff, 0x444444, 0.8)`
 {% for light in lights %}
     -   **{{ light.light_type }}**: `new THREE.{{ light.light_class }}({{ light.light_color }}, {{ light.intensity }}{% if light.additional_props %}, {{ light.additional_props }}{% endif %})`  
 {% endfor %}
@@ -85,6 +102,8 @@ Ensure appending `renderer.domElement` to `document.body` and handle resizing.
     
 -   Animate {{ animated_elements }} along specified paths or motions:
     
+    Example animation motion snippet:
+    
     ```js
     // Example animation code snippet
     const curve = new THREE.CatmullRomCurve3([
@@ -94,14 +113,49 @@ Ensure appending `renderer.domElement` to `document.body` and handle resizing.
     ]);
     
     ```
-    
-    Update animation each frame:
-    
-    ```js
-    const t = (elapsed * {{ animation_speed }} + offset) % 1;
-    particle.position.copy(curve.getPoint(t));
-    
-    ```
+  
+- **User Interaction**:  
+  Include interactive elements such as clickable objects, sliders, or buttons to control key aspects of the simulation. For example:  
+  - Toggle switches or start/stop buttons.  
+  - Sliders to adjust parameters (e.g., compression, voltage, flow rate).  
+  - Click or drag controls to manipulate objects or trigger state changes.  
+  Use `THREE.Raycaster` or appropriate event listeners to handle mouse or touch input.
+
+- **Animation Logic**:  
+  Animate relevant scene elements to clearly demonstrate the physical phenomena involved, such as:  
+  - Moving particles (e.g., electrons, gas molecules) along predefined paths using `THREE.CatmullRomCurve3` or free movement with collision detection.  
+  - Translating or rotating mechanical parts (e.g., piston moving along Y-axis, switch toggling).  
+  - Visual indicators showing flow direction, magnitude, or state changes.  
+  Include smooth, continuous animations updated per frame with time-based parameters (e.g., elapsed time, speed multipliers).
+
+  Example animation update snippet:
+
+  ```js
+  const t = (elapsed * {{ animation_speed }} + offset) % 1;
+  animatedObject.position.copy(animationCurve.getPoint(t));
+  ```
+
+- Physical Simulation (if applicable):
+  Incorporate simple physics approximations, such as:
+
+    - Elastic collisions between particles and boundaries.
+
+    - Dynamic calculations reflecting real-world relationships (e.g., pressure inversely proportional to volume, current proportional to voltage/resistance).
+      Update related metrics in real-time and reflect them via UI overlays or in-scene labels.
+
+- Visual Feedback:
+  Provide clear visual feedback corresponding to user actions and animation states, such as:
+
+    - Highlighting toggled switches or active components.
+
+    - Changing particle emission or brightness to indicate flow intensity.
+
+    - Updating text panels or HUD elements with current simulation values.
+
+- Optional UI Components:
+  Include on-screen controls like sliders, buttons, or panels to allow user input and display real-time data. Synchronize UI changes with 3D scene updates.
+
+- Ensure all interactive and animated elements are accessible and functional via mouse and touch input, and that animations loop or transition smoothly without abrupt jumps.
     
 
 ----------

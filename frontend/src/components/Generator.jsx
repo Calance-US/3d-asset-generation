@@ -45,7 +45,6 @@ export default function Generator() {
   });
 
   const [enhancing, setEnhancing] = useState(false);
-  const [selectedHistoryId, setSelectedHistoryId] = useState(null);
 
   // Load history on component mount
   useEffect(() => {
@@ -91,12 +90,20 @@ export default function Generator() {
         subject,
         config: {
           ...config,
+          three_js_url: "https://esm.sh/three@0.155.0",
+          orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+          camera_controls: "OrbitControls",
+          curve_points: [{ x: 0, y: 0, z: 0 }],
+          animation_speed: 1.0,
+          tts_language: "en-US",
+          tts_rate: 1.0,
+          tts_pitch: 1.0,
           renderer: {
             antialias: config?.renderer?.antialias ?? true,
             shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
             shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
-            outputColorSpace: config?.renderer?.outputColorSpace || "sRGB",
-            toneMapping: config?.renderer?.toneMapping || "ACESFilmic",
+            outputColorSpace: config?.renderer?.outputColorSpace || "SRGBColorSpace",
+            toneMapping: config?.renderer?.toneMapping || "ACESFilmicToneMapping",
             toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
           }
         }
@@ -113,12 +120,20 @@ export default function Generator() {
           subject: subject,
           config: {
             ...config,
+            three_js_url: "https://esm.sh/three@0.155.0",
+            orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+            camera_controls: "OrbitControls",
+            curve_points: [{ x: 0, y: 0, z: 0 }],
+            animation_speed: 1.0,
+            tts_language: "en-US",
+            tts_rate: 1.0,
+            tts_pitch: 1.0,
             renderer: {
               antialias: config?.renderer?.antialias ?? true,
               shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
               shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
-              outputColorSpace: config?.renderer?.outputColorSpace || "sRGB",
-              toneMapping: config?.renderer?.toneMapping || "ACESFilmic",
+              outputColorSpace: config?.renderer?.outputColorSpace || "SRGBColorSpace",
+              toneMapping: config?.renderer?.toneMapping || "ACESFilmicToneMapping",
               toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
             }
           }
@@ -199,8 +214,8 @@ export default function Generator() {
             antialias: enhancedData.renderer?.antialias ?? true,
             shadowMapEnabled: enhancedData.renderer?.shadowMapEnabled ?? true,
             shadowMapType: enhancedData.renderer?.shadowMapType || "PCFSoftShadowMap",
-            outputColorSpace: enhancedData.renderer?.outputColorSpace || "sRGB",
-            toneMapping: enhancedData.renderer?.toneMapping || "ACESFilmic",
+            outputColorSpace: enhancedData.renderer?.outputColorSpace || "SRGBColorSpace",
+            toneMapping: enhancedData.renderer?.toneMapping || "ACESFilmicToneMapping",
             toneMappingExposure: enhancedData.renderer?.toneMappingExposure ?? 1.0
           }
         };
@@ -237,12 +252,11 @@ export default function Generator() {
           antialias: entry.config?.renderer?.antialias ?? true,
           shadowMapEnabled: entry.config?.renderer?.shadowMapEnabled ?? true,
           shadowMapType: entry.config?.renderer?.shadowMapType || "PCFSoftShadowMap",
-          outputColorSpace: entry.config?.renderer?.outputColorSpace || "sRGB",
-          toneMapping: entry.config?.renderer?.toneMapping || "ACESFilmic",
+          outputColorSpace: entry.config?.renderer?.outputColorSpace || "SRGBColorSpace",
+          toneMapping: entry.config?.renderer?.toneMapping || "ACESFilmicToneMapping",
           toneMappingExposure: entry.config?.renderer?.toneMappingExposure ?? 1.0
         }
       });
-      setSelectedHistoryId(entry.id);
       
       // Load the HTML content
       if (entry.html) {
@@ -289,8 +303,8 @@ export default function Generator() {
         antialias: true,
         shadowMapEnabled: true,
         shadowMapType: "PCFSoftShadowMap",
-        outputColorSpace: "sRGB",
-        toneMapping: "ACESFilmic",
+        outputColorSpace: "SRGBColorSpace",
+        toneMapping: "ACESFilmicToneMapping",
         toneMappingExposure: 1.0
       },
       camera_controls: "OrbitControls",

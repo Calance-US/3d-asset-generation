@@ -688,7 +688,7 @@ async def enhance_prompt(request: GenerateRequest):
             ],
             "materials": [
                 {{
-                    "material_name": "Name of the material (max 50 chars)",
+                    "material_name": "Name of the material [threejs material class - chose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial]",
                     "color": "0xRRGGBB",
                     "metalness": 0.5,
                     "roughness": 0.5
@@ -697,7 +697,7 @@ async def enhance_prompt(request: GenerateRequest):
             "lights": [
                 {{
                     "light_type": "Type of light (max 50 chars)",
-                    "light_class": "THREE.LightClass",
+                    "light_class": "THREE.LightClass [threejs light class - chose between DirectionalLight, AmbientLight, HemisphereLight]",
                     "light_color": "0xRRGGBB",
                     "intensity": 0.5
                 }}
