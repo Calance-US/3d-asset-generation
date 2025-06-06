@@ -28,6 +28,12 @@ ENV/
 env.bak/
 venv.bak/
 .python-version
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
 
 # Node
 node_modules/
@@ -45,6 +51,12 @@ coverage/
 out/
 build/
 dist/
+.cache/
+.parcel-cache/
+.npm
+.eslintcache
+.stylelintcache
+.prettiercache
 
 # IDE
 .idea/
@@ -56,6 +68,15 @@ dist/
 .settings/
 *.sublime-workspace
 *.sublime-project
+*.code-workspace
+.history/
+*.sublime-*
+*.tmproj
+*.tmproject
+*.komodoproject
+.komodotools/
+.project
+.factorypath
 
 # Project specific
 backend/app/data/history.json
@@ -63,7 +84,50 @@ backend/app/data/history.json
 .env
 .env.*
 !.env.example
+*.sqlite3
+*.db
+*.sqlite
+*.sqlite-journal
+*.db-journal
+*.db-shm
+*.db-wal
 
 # System Files
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.lnk
+.directory
+.Trash-*
+.nfs*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~.nib
+local.properties
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# Build and deployment
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
+.vscode-test/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*

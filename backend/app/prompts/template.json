@@ -1,0 +1,109 @@
+{
+  "type": "object",
+  "properties": {
+    "topic_name": { "type": "string" },
+    "key_concepts": { "type": "string" },
+    "three_js_url": { "type": "string", "format": "uri" },
+    "orbit_controls_url": { "type": "string", "format": "uri" },
+    "additional_imports_comment": { "type": "string" },
+    "education_level": { "type": "string" },
+    "learning_objectives": { "type": "string" },
+    "interactive_features": { "type": "string" },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "component_name": { "type": "string" },
+          "component_description": { "type": "string" }
+        },
+        "required": ["component_name", "component_description"]
+      }
+    },
+    "materials": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "material_name": { "type": "string" },
+          "color": { "type": "string" },
+          "metalness": { "type": "number" },
+          "roughness": { "type": "number" },
+          "emissive": { "type": "string" },
+          "emissiveIntensity": { "type": "number" }
+        },
+        "required": ["material_name", "color", "metalness", "roughness"]
+      }
+    },
+    "lights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "light_type": { "type": "string" },
+          "light_class": { "type": "string" },
+          "light_color": { "type": "string" },
+          "intensity": { "type": "number" },
+          "additional_props": { "type": "string" }
+        },
+        "required": ["light_type", "light_class", "light_color", "intensity"]
+      }
+    },
+    "renderer": {
+      "type": "object",
+      "properties": {
+        "antialias": { "type": "boolean" },
+        "shadowMapEnabled": { "type": "boolean" },
+        "shadowMapType": { "type": "string" },
+        "toneMapping": { "type": "string" },
+        "outputColorSpace": { "type": "string" }
+      },
+      "required": ["antialias", "shadowMapEnabled", "shadowMapType", "toneMapping", "outputColorSpace"]
+    },
+    "camera_controls": { "type": "string" },
+    "interactive_description": { "type": "string" },
+    "animated_elements": { "type": "string" },
+    "curve_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "z": { "type": "number" }
+        },
+        "required": ["x", "y", "z"]
+      }
+    },
+    "animation_speed": { "type": "number" },
+    "tts_language": { "type": "string" },
+    "tts_rate": { "type": "number" },
+    "tts_pitch": { "type": "number" },
+    "narration_texts": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": [
+    "topic_name",
+    "key_concepts",
+    "three_js_url",
+    "orbit_controls_url",
+    "education_level",
+    "learning_objectives",
+    "interactive_features",
+    "components",
+    "materials",
+    "lights",
+    "renderer",
+    "camera_controls",
+    "interactive_description",
+    "animated_elements",
+    "curve_points",
+    "animation_speed",
+    "tts_language",
+    "tts_rate",
+    "tts_pitch",
+    "narration_texts"
+  ]
+}

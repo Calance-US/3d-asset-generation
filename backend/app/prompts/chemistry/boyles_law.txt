@@ -162,6 +162,64 @@ Ensure you append `renderer.domElement` to `document.body` and handle resizing.
 
 ---
 
+## 🔊 Voice Narration
+
+* Integrate **audio voiceover narration** using the Web Speech API for text-to-speech synthesis.
+* Include JavaScript code snippets to initialize speech synthesis, queue narration segments, and provide playback controls.
+
+Example code snippet for voice narration setup and control:
+
+```js
+// Initialize speech synthesis
+const synth = window.speechSynthesis;
+let utteranceQueue = [];
+
+// Function to speak a given text
+function speak(text) {
+  if (!synth) return;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'en-US'; // set language
+  utterance.rate = 1;       // normal speed
+  utterance.pitch = 1;      // normal pitch
+  synth.speak(utterance);
+  return utterance;
+}
+
+// Queue multiple narration segments sequentially
+function speakSequence(textArray) {
+  if (!synth) return;
+  utteranceQueue = textArray.map(t => new SpeechSynthesisUtterance(t));
+  utteranceQueue.forEach((u, i) => {
+    u.lang = 'en-US';
+    u.rate = 1;
+    u.pitch = 1;
+    if (i > 0) {
+      utteranceQueue[i - 1].addEventListener('end', () => synth.speak(u));
+    }
+  });
+  if (utteranceQueue.length > 0) synth.speak(utteranceQueue[0]);
+}
+
+// Example usage: play narration on scene start or user action
+const narrationTexts = [
+  "Welcome to the Boyle's Law simulation.",
+  "Observe the relationship between pressure and volume.",
+  "Toggle the button push the piston up/down."
+];
+speakSequence(narrationTexts);
+
+// Controls for play, pause, resume, and cancel
+function pauseNarration() { if (synth.speaking) synth.pause(); }
+function resumeNarration() { if (synth.paused) synth.resume(); }
+function cancelNarration() { if (synth.speaking || synth.paused) synth.cancel(); }
+```
+
+* Provide UI buttons linked to these functions for user control (play, pause, stop).
+* Synchronize narration segments with key animation states or user interactions by invoking `speak()` or `speakSequence()` accordingly.
+* Include fallback checks for browser support of `speechSynthesis`.
+
+---
+
 ## 📦 Output Requirements
 
 1. **Standalone HTML** with:

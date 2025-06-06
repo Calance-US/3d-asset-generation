@@ -1,0 +1,944 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import { Disclosure } from '@headlessui/react';
+import { ChevronUpIcon } from '@heroicons/react/20/solid';
+
+export default function Generator() {
+  const [prompt, setPrompt] = useState("");
+  const [provider, setProvider] = useState("openai");
+  const [subject, setSubject] = useState("physics");
+  const [html, setHtml] = useState("");
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const iframeRef = useRef(null);
+  const [config, setConfig] = useState({
+    topic_name: "",
+    key_concepts: "",
+    three_js_url: "https://esm.sh/three@0.155.0",
+    orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+    additional_imports_comment: "",
+    education_level: "High School",
+    learning_objectives: "",
+    interactive_features: "",
+    components: [],
+    materials: [],
+    lights: [],
+    renderer: {
+      antialias: true,
+      shadowMapEnabled: true,
+      shadowMapType: "PCFSoftShadowMap",
+      outputColorSpace: "SRGBColorSpace",
+      toneMapping: "ACESFilmicToneMapping",
+      toneMappingExposure: 1.0
+    },
+    camera_controls: "OrbitControls",
+    interactive_description: "",
+    animated_elements: "",
+    curve_points: [{ x: 0, y: 0, z: 0 }],
+    animation_speed: 1.0,
+    tts_language: "en-US",
+    tts_rate: 1.0,
+    tts_pitch: 1.0,
+    narration_texts: []
+  });
+
+  const [enhancing, setEnhancing] = useState(false);
+  const [selectedHistoryId, setSelectedHistoryId] = useState(null);
+
+  // Load history on component mount
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  // Add fullscreen handler
+  const handleFullscreen = () => {
+    if (iframeRef.current) {
+      if (iframeRef.current.requestFullscreen) {
+        iframeRef.current.requestFullscreen();
+      } else if (iframeRef.current.webkitRequestFullscreen) {
+        iframeRef.current.webkitRequestFullscreen();
+      } else if (iframeRef.current.msRequestFullscreen) {
+        iframeRef.current.msRequestFullscreen();
+      }
+    }
+  };
+
+  async function loadHistory() {
+    try {
+      const res = await fetch("http://localhost:8000/history");
+      const data = await res.json();
+      setHistory(data.entries);
+    } catch (err) {
+      console.error("Error loading history:", err);
+    }
+  }
+
+  async function handleGenerate() {
+    if (!prompt) {
+      console.warn("Attempting to generate with empty prompt");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      console.info("Starting generation process...");
+      console.debug("Request details:", {
+        prompt,
+        provider,
+        subject,
+        config: {
+          ...config,
+          renderer: {
+            antialias: config?.renderer?.antialias ?? true,
+            shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
+            shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
+            outputColorSpace: config?.renderer?.outputColorSpace || "sRGB",
+            toneMapping: config?.renderer?.toneMapping || "ACESFilmic",
+            toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
+          }
+        }
+      });
+
+      const response = await fetch("http://localhost:8000/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          topic: prompt,
+          provider: provider,
+          subject: subject,
+          config: {
+            ...config,
+            renderer: {
+              antialias: config?.renderer?.antialias ?? true,
+              shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
+              shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
+              outputColorSpace: config?.renderer?.outputColorSpace || "sRGB",
+              toneMapping: config?.renderer?.toneMapping || "ACESFilmic",
+              toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
+            }
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Generation failed:", errorData);
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.debug("Response data:", data);
+      
+      setHtml(data.html);
+      console.info("Generation completed successfully");
+    } catch (err) {
+      console.error("Error during generation:", err);
+      setError(`Error generating visualization: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleEnhance = async () => {
+    if (!prompt) {
+      console.warn("Enhance attempted with empty prompt");
+      setError("Please enter a prompt first");
+      return;
+    }
+
+    console.info(`Starting prompt enhancement for: "${prompt}" using ${provider} provider`);
+    setEnhancing(true);
+    setError("");
+
+    try {
+      console.debug("Sending enhancement request to backend");
+      const response = await fetch("http://localhost:8000/enhance-prompt", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          topic: prompt,
+          provider,
+          subject,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Enhancement request failed:", errorData);
+        throw new Error(errorData.detail || "Failed to enhance prompt");
+      }
+
+      const enhancedData = await response.json();
+      console.info("Successfully received enhanced configuration");
+      console.debug("Enhanced configuration:", enhancedData);
+      
+      // Update the config with enhanced values
+      setConfig(prev => {
+        const newConfig = {
+          ...prev,
+          topic_name: enhancedData.topic_name,
+          key_concepts: enhancedData.key_concepts,
+          education_level: enhancedData.education_level,
+          learning_objectives: enhancedData.learning_objectives,
+          interactive_features: enhancedData.interactive_features,
+          components: enhancedData.components,
+          materials: enhancedData.materials,
+          lights: enhancedData.lights,
+          interactive_description: enhancedData.interactive_description,
+          animated_elements: enhancedData.animated_elements,
+          narration_texts: enhancedData.narration_texts,
+          renderer: {
+            ...prev.renderer,
+            antialias: enhancedData.renderer?.antialias ?? true,
+            shadowMapEnabled: enhancedData.renderer?.shadowMapEnabled ?? true,
+            shadowMapType: enhancedData.renderer?.shadowMapType || "PCFSoftShadowMap",
+            outputColorSpace: enhancedData.renderer?.outputColorSpace || "sRGB",
+            toneMapping: enhancedData.renderer?.toneMapping || "ACESFilmic",
+            toneMappingExposure: enhancedData.renderer?.toneMappingExposure ?? 1.0
+          }
+        };
+        console.debug("Updated configuration:", newConfig);
+        return newConfig;
+      });
+
+    } catch (err) {
+      console.error("Error during prompt enhancement:", err);
+      setError(err.message);
+    } finally {
+      console.info("Prompt enhancement completed");
+      setEnhancing(false);
+    }
+  };
+
+  const handleHistorySelect = async (entry) => {
+    try {
+      setPrompt(entry.prompt);
+      // Ensure config has all required fields with defaults if missing
+      setConfig({
+        topic_name: entry.config?.topic_name || "",
+        key_concepts: entry.config?.key_concepts || "",
+        education_level: entry.config?.education_level || "High School",
+        learning_objectives: entry.config?.learning_objectives || "",
+        interactive_features: entry.config?.interactive_features || "",
+        components: entry.config?.components || [],
+        materials: entry.config?.materials || [],
+        lights: entry.config?.lights || [],
+        interactive_description: entry.config?.interactive_description || "",
+        animated_elements: entry.config?.animated_elements || "",
+        narration_texts: entry.config?.narration_texts || [],
+        renderer: {
+          antialias: entry.config?.renderer?.antialias ?? true,
+          shadowMapEnabled: entry.config?.renderer?.shadowMapEnabled ?? true,
+          shadowMapType: entry.config?.renderer?.shadowMapType || "PCFSoftShadowMap",
+          outputColorSpace: entry.config?.renderer?.outputColorSpace || "sRGB",
+          toneMapping: entry.config?.renderer?.toneMapping || "ACESFilmic",
+          toneMappingExposure: entry.config?.renderer?.toneMappingExposure ?? 1.0
+        }
+      });
+      setSelectedHistoryId(entry.id);
+      
+      // Load the HTML content
+      if (entry.html) {
+        setHtml(entry.html);
+        setLoading(false);
+        setError(null);
+      } else {
+        // If HTML is not in the entry, fetch it from the server
+        const response = await fetch(`http://localhost:8000/history/${entry.id}/html`);
+        if (!response.ok) {
+          throw new Error(`Failed to load HTML: ${response.statusText}`);
+        }
+        const data = await response.json();
+        setHtml(data.html);
+        setLoading(false);
+        setError(null);
+      }
+    } catch (err) {
+      console.error("Error loading history entry:", err);
+      setError(`Error loading history entry: ${err.message}`);
+      setLoading(false);
+    }
+  };
+
+  async function handleReset() {
+    setPrompt("");
+    setProvider("openai");
+    setSubject("physics");
+    setHtml("");
+    setError("");
+    setConfig({
+      topic_name: "",
+      key_concepts: "",
+      three_js_url: "https://esm.sh/three@0.155.0",
+      orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+      additional_imports_comment: "",
+      education_level: "High School",
+      learning_objectives: "",
+      interactive_features: "",
+      components: [],
+      materials: [],
+      lights: [],
+      renderer: {
+        antialias: true,
+        shadowMapEnabled: true,
+        shadowMapType: "PCFSoftShadowMap",
+        outputColorSpace: "sRGB",
+        toneMapping: "ACESFilmic",
+        toneMappingExposure: 1.0
+      },
+      camera_controls: "OrbitControls",
+      interactive_description: "",
+      animated_elements: "",
+      curve_points: [{ x: 0, y: 0, z: 0 }],
+      animation_speed: 1.0,
+      tts_language: "en-US",
+      tts_rate: 1.0,
+      tts_pitch: 1.0,
+      narration_texts: []
+    });
+  }
+
+  async function handleDeleteEntry(entryId, event) {
+    event.stopPropagation();
+    try {
+      const res = await fetch(`http://localhost:8000/history/${entryId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        loadHistory();
+      } else {
+        setError('Failed to delete history entry');
+      }
+    } catch (err) {
+      setError(`Error deleting history entry: ${err.message}`);
+    }
+  }
+
+  async function handleDownload(entry, event) {
+    event.stopPropagation();
+    try {
+      const blob = new Blob([entry.html], { type: 'text/html' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const timestamp = new Date(entry.timestamp).toISOString().split('T')[0];
+      const filename = `visualization_${timestamp}_${entry.prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(`Error downloading file: ${err.message}`);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold text-white">3D Concept Visualizer</h1>
+          <div className="flex space-x-4">
+            <Link
+              to="/admin"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Admin Dashboard
+            </Link>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            >
+              {showHistory ? "Hide History" : "Show History"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* History Panel */}
+          {showHistory && (
+            <div className="lg:col-span-1">
+              <div className="bg-gray-800 shadow rounded-lg p-6">
+                <h2 className="text-lg font-medium text-white mb-4">Generation History</h2>
+                <div className="space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                  {history.length === 0 ? (
+                    <p className="text-gray-400 text-center py-4">No history available</p>
+                  ) : (
+                    history.map((entry) => (
+                      <div
+                        key={entry.id}
+                        onClick={() => handleHistorySelect(entry)}
+                        className="p-4 border border-gray-700 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors duration-150"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-300">
+                              {entry.prompt.length > 100 
+                                ? `${entry.prompt.substring(0, 97)}...` 
+                                : entry.prompt}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-2">
+                              {new Date(entry.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-200">
+                              {entry.provider}
+                            </span>
+                            <button
+                              onClick={(e) => handleDownload(entry, e)}
+                              className="p-1 text-gray-400 hover:text-green-400 focus:outline-none"
+                              title="Download HTML"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteEntry(entry.id, e)}
+                              className="p-1 text-gray-400 hover:text-red-400 focus:outline-none"
+                              title="Delete entry"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Main Content */}
+          <div className={`${showHistory ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            <div className="bg-gray-800 shadow rounded-lg p-6">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">
+                    Enter Concept Prompt
+                  </label>
+                  <div className="mt-1 flex space-x-2">
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      className="flex-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                      rows={4}
+                      placeholder="e.g., 'Explain Ohm's Law using a 3D electric circuit'"
+                    />
+                    <button
+                      onClick={handleEnhance}
+                      disabled={enhancing || !prompt}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {enhancing ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Enhancing...
+                        </>
+                      ) : (
+                        "Enhance"
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">
+                    Choose AI Provider
+                  </label>
+                  <select
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                  >
+                    <option value="openai">OpenAI (GPT-4)</option>
+                    <option value="ollama">Ollama (local)</option>
+                    <option value="gemini">Google (Gemini)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300">
+                    Choose Subject
+                  </label>
+                  <select
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                  >
+                    <option value="physics">Physics</option>
+                    <option value="chemistry">Chemistry</option>
+                    <option value="biology">Biology</option>
+                    <option value="mathematics">Mathematics</option>
+                  </select>
+                </div>
+
+                {/* Advanced Configuration Accordion */}
+                <Disclosure>
+                  {({ open }) => (
+                    <>
+                      <Disclosure.Button className="flex w-full justify-between rounded-lg bg-gray-900 px-4 py-2 text-left text-sm font-medium text-gray-300 hover:bg-gray-800 focus:outline-none focus-visible:ring focus-visible:ring-purple-500">
+                        <span>Advanced Configuration</span>
+                        <ChevronUpIcon
+                          className={`${open ? 'rotate-180 transform' : ''} h-5 w-5 text-gray-300`}
+                        />
+                      </Disclosure.Button>
+                      <Disclosure.Panel className="px-4 pt-4 pb-2 text-sm text-gray-300 space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300">
+                            Key Concepts
+                          </label>
+                          <p className="mt-1 text-sm text-gray-400">{config?.key_concepts || "No key concepts defined"}</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300">
+                            Education Level
+                          </label>
+                          <select
+                            value={config.education_level}
+                            onChange={(e) => setConfig(prev => ({ ...prev, education_level: e.target.value }))}
+                            className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                          >
+                            <option value="Elementary">Elementary</option>
+                            <option value="Middle School">Middle School</option>
+                            <option value="High School">High School</option>
+                            <option value="College">College</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300">
+                            Learning Objectives
+                          </label>
+                          <p className="mt-1 text-sm text-gray-400">{config?.learning_objectives || "No learning objectives defined"}</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300">
+                            Interactive Features
+                          </label>
+                          <p className="mt-1 text-sm text-gray-400">{config?.interactive_features || "No interactive features defined"}</p>
+                        </div>
+
+                        {/* Components Section */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Components
+                          </label>
+                          {config.components.map((component, index) => (
+                            <div key={index} className="flex gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={component.component_name}
+                                onChange={(e) => {
+                                  const newComponents = [...config.components];
+                                  newComponents[index] = { ...component, component_name: e.target.value };
+                                  setConfig(prev => ({ ...prev, components: newComponents }));
+                                }}
+                                placeholder="Component Name"
+                                className="flex-1 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              />
+                              <input
+                                type="text"
+                                value={component.component_description}
+                                onChange={(e) => {
+                                  const newComponents = [...config.components];
+                                  newComponents[index] = { ...component, component_description: e.target.value };
+                                  setConfig(prev => ({ ...prev, components: newComponents }));
+                                }}
+                                placeholder="Description"
+                                className="flex-1 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              />
+                              <button
+                                onClick={() => {
+                                  const newComponents = config.components.filter((_, i) => i !== index);
+                                  setConfig(prev => ({ ...prev, components: newComponents }));
+                                }}
+                                className="px-2 py-1 text-red-400 hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              setConfig(prev => ({
+                                ...prev,
+                                components: [...prev.components, { component_name: '', component_description: '' }]
+                              }));
+                            }}
+                            className="mt-2 text-sm text-purple-400 hover:text-purple-300"
+                          >
+                            + Add Component
+                          </button>
+                        </div>
+
+                        {/* Materials Section */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Materials
+                          </label>
+                          {config.materials.map((material, index) => (
+                            <div key={index} className="flex gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={material.material_name}
+                                onChange={(e) => {
+                                  const newMaterials = [...config.materials];
+                                  newMaterials[index] = { ...material, material_name: e.target.value };
+                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                }}
+                                placeholder="Material Name"
+                                className="flex-1 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              />
+                              <input
+                                type="text"
+                                value={material.color}
+                                onChange={(e) => {
+                                  const newMaterials = [...config.materials];
+                                  newMaterials[index] = { ...material, color: e.target.value };
+                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                }}
+                                placeholder="Color (hex)"
+                                className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              />
+                              <input
+                                type="number"
+                                value={material.metalness}
+                                onChange={(e) => {
+                                  const newMaterials = [...config.materials];
+                                  newMaterials[index] = { ...material, metalness: parseFloat(e.target.value) };
+                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                }}
+                                placeholder="Metalness"
+                                className="w-24 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                step="0.1"
+                                min="0"
+                                max="1"
+                              />
+                              <input
+                                type="number"
+                                value={material.roughness}
+                                onChange={(e) => {
+                                  const newMaterials = [...config.materials];
+                                  newMaterials[index] = { ...material, roughness: parseFloat(e.target.value) };
+                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                }}
+                                placeholder="Roughness"
+                                className="w-24 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                step="0.1"
+                                min="0"
+                                max="1"
+                              />
+                              <button
+                                onClick={() => {
+                                  const newMaterials = config.materials.filter((_, i) => i !== index);
+                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                }}
+                                className="px-2 py-1 text-red-400 hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              setConfig(prev => ({
+                                ...prev,
+                                materials: [...prev.materials, { material_name: '', color: '0x808080', metalness: 0.5, roughness: 0.5 }]
+                              }));
+                            }}
+                            className="mt-2 text-sm text-purple-400 hover:text-purple-300"
+                          >
+                            + Add Material
+                          </button>
+                        </div>
+
+                        {/* Lights Section */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Lights
+                          </label>
+                          {config.lights.map((light, index) => (
+                            <div key={index} className="flex gap-2 mb-2">
+                              <select
+                                value={light.light_type}
+                                onChange={(e) => {
+                                  const newLights = [...config.lights];
+                                  newLights[index] = { ...light, light_type: e.target.value };
+                                  setConfig(prev => ({ ...prev, lights: newLights }));
+                                }}
+                                className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              >
+                                <option value="Ambient">Ambient</option>
+                                <option value="Directional">Directional</option>
+                                <option value="Point">Point</option>
+                                <option value="Spot">Spot</option>
+                              </select>
+                              <input
+                                type="text"
+                                value={light.light_color}
+                                onChange={(e) => {
+                                  const newLights = [...config.lights];
+                                  newLights[index] = { ...light, light_color: e.target.value };
+                                  setConfig(prev => ({ ...prev, lights: newLights }));
+                                }}
+                                placeholder="Color (hex)"
+                                className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              />
+                              <input
+                                type="number"
+                                value={light.intensity}
+                                onChange={(e) => {
+                                  const newLights = [...config.lights];
+                                  newLights[index] = { ...light, intensity: parseFloat(e.target.value) };
+                                  setConfig(prev => ({ ...prev, lights: newLights }));
+                                }}
+                                placeholder="Intensity"
+                                className="w-24 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                step="0.1"
+                                min="0"
+                              />
+                              <button
+                                onClick={() => {
+                                  const newLights = config.lights.filter((_, i) => i !== index);
+                                  setConfig(prev => ({ ...prev, lights: newLights }));
+                                }}
+                                className="px-2 py-1 text-red-400 hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              setConfig(prev => ({
+                                ...prev,
+                                lights: [...prev.lights, { light_type: "Ambient", light_class: "AmbientLight", light_color: "0xffffff", intensity: 0.5 }]
+                              }));
+                            }}
+                            className="mt-2 text-sm text-purple-400 hover:text-purple-300"
+                          >
+                            + Add Light
+                          </button>
+                        </div>
+
+                        {/* Renderer Settings */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Renderer Settings
+                          </label>
+                          <div className="mt-2 space-y-2">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={config?.renderer?.antialias ?? true}
+                                onChange={(e) => setConfig(prev => ({
+                                  ...prev,
+                                  renderer: { ...prev.renderer, antialias: e.target.checked }
+                                }))}
+                                className="h-4 w-4 rounded border-gray-700 bg-gray-900 text-purple-600 focus:ring-purple-500"
+                              />
+                              <label className="ml-2 text-sm text-gray-300">Antialiasing</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={config?.renderer?.shadowMapEnabled ?? true}
+                                onChange={(e) => setConfig(prev => ({
+                                  ...prev,
+                                  renderer: { ...prev.renderer, shadowMapEnabled: e.target.checked }
+                                }))}
+                                className="h-4 w-4 rounded border-gray-700 bg-gray-900 text-purple-600 focus:ring-purple-500"
+                              />
+                              <label className="ml-2 text-sm text-gray-300">Shadows</label>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Animation Settings */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300">
+                            Animation Speed
+                          </label>
+                          <input
+                            type="number"
+                            value={config.animation_speed}
+                            onChange={(e) => setConfig(prev => ({ ...prev, animation_speed: parseFloat(e.target.value) }))}
+                            className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                            step="0.1"
+                            min="0.1"
+                            max="5"
+                          />
+                        </div>
+
+                        {/* TTS Settings */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Text-to-Speech Settings
+                          </label>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-xs text-gray-400">Language</label>
+                              <select
+                                value={config.tts_language}
+                                onChange={(e) => setConfig(prev => ({ ...prev, tts_language: e.target.value }))}
+                                className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                              >
+                                <option value="en-US">English (US)</option>
+                                <option value="en-GB">English (UK)</option>
+                                <option value="es-ES">Spanish</option>
+                                <option value="fr-FR">French</option>
+                                <option value="de-DE">German</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400">Rate</label>
+                              <input
+                                type="number"
+                                value={config.tts_rate}
+                                onChange={(e) => setConfig(prev => ({ ...prev, tts_rate: parseFloat(e.target.value) }))}
+                                className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                step="0.1"
+                                min="0.5"
+                                max="2"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400">Pitch</label>
+                              <input
+                                type="number"
+                                value={config.tts_pitch}
+                                onChange={(e) => setConfig(prev => ({ ...prev, tts_pitch: parseFloat(e.target.value) }))}
+                                className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                step="0.1"
+                                min="0.5"
+                                max="2"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Narration Texts */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Narration Texts
+                          </label>
+                          {config.narration_texts.map((text, index) => (
+                            <div key={index} className="flex gap-2 mb-2">
+                              <textarea
+                                value={text}
+                                onChange={(e) => {
+                                  const newTexts = [...config.narration_texts];
+                                  newTexts[index] = e.target.value;
+                                  setConfig(prev => ({ ...prev, narration_texts: newTexts }));
+                                }}
+                                placeholder="Narration text"
+                                className="flex-1 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                rows={2}
+                              />
+                              <button
+                                onClick={() => {
+                                  const newTexts = config.narration_texts.filter((_, i) => i !== index);
+                                  setConfig(prev => ({ ...prev, narration_texts: newTexts }));
+                                }}
+                                className="px-2 py-1 text-red-400 hover:text-red-300"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => {
+                              setConfig(prev => ({
+                                ...prev,
+                                narration_texts: [...prev.narration_texts, '']
+                              }));
+                            }}
+                            className="mt-2 text-sm text-purple-400 hover:text-purple-300"
+                          >
+                            + Add Narration
+                          </button>
+                        </div>
+                      </Disclosure.Panel>
+                    </>
+                  )}
+                </Disclosure>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={loading}
+                    className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {loading ? 'Generating...' : 'Generate Scene'}
+                  </button>
+
+                  <button
+                    onClick={handleReset}
+                    className="flex justify-center py-2 px-4 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="rounded-md bg-red-900/50 p-4">
+                    <div className="flex">
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-red-200">Error</h3>
+                        <div className="mt-2 text-sm text-red-300">{error}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {html && (
+                <div className="mt-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-medium text-white">Generated Visualization</h2>
+                    <button
+                      onClick={handleFullscreen}
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                      </svg>
+                      Fullscreen
+                    </button>
+                  </div>
+                  <div className="border border-gray-700 rounded-lg overflow-hidden">
+                    <iframe
+                      ref={iframeRef}
+                      srcDoc={html}
+                      className="w-full h-[60vh]"
+                      title="3D Visualization"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+} 

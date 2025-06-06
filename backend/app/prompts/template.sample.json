@@ -1,0 +1,113 @@
+{
+    "topic_name": "Ohm’s Law (V = IR)",
+    "key_concepts": "voltage, current, and resistance",
+    "three_js_url": "https://esm.sh/three@0.155.0",
+    "orbit_controls_url": "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+    "additional_imports_comment": "// Additional imports if needed",
+    "education_level": "CBSE Class 9–10 (Physics – Electricity)",
+    "learning_objectives": "clearly depict voltage, current, and resistance; demonstrate their relationship",
+    "interactive_features": "toggle switch to start/stop electron flow",
+    "components": [
+      {
+        "component_name": "Battery",
+        "component_description": "5V, cylindrical with metallic texture and polarity indicators"
+      },
+      {
+        "component_name": "Resistor",
+        "component_description": "10Ω, wire-wound ceramic body with color bands"
+      },
+      {
+        "component_name": "Switch",
+        "component_description": "Rocker or lever switch placed visibly in the circuit"
+      },
+      {
+        "component_name": "Wires",
+        "component_description": "Braided copper, spatially arranged with height differences for depth"
+      },
+      {
+        "component_name": "Electron Flow Indicators",
+        "component_description": "Glowing spheres or arrows that follow the current path"
+      }
+    ],
+    "materials": [
+      {
+        "material_name": "Battery",
+        "color": "0x333333",
+        "metalness": 1.0,
+        "roughness": 0.25
+      },
+      {
+        "material_name": "Resistor",
+        "color": "0xD2B48C",
+        "metalness": 0.0,
+        "roughness": 0.75
+      },
+      {
+        "material_name": "Wires",
+        "color": "0xb87333",
+        "metalness": 1.0,
+        "roughness": 0.3
+      },
+      {
+        "material_name": "Switch",
+        "color": "0x4A3B31",
+        "metalness": 0.05,
+        "roughness": 0.45
+      },
+      {
+        "material_name": "Electron Particles",
+        "color": "0x00ffff",
+        "metalness": 0.1,
+        "roughness": 0.4,
+        "emissive": "0x00ffff",
+        "emissiveIntensity": 2
+      }
+    ],
+    "lights": [
+      {
+        "light_type": "Hemisphere Light",
+        "light_class": "HemisphereLight",
+        "light_color": "0xffffff, 0x444444",
+        "intensity": 0.8,
+        "additional_props": ""
+      },
+      {
+        "light_type": "Ambient Light",
+        "light_class": "AmbientLight",
+        "light_color": "0xffffff",
+        "intensity": 0.2,
+        "additional_props": ""
+      },
+      {
+        "light_type": "Directional Light (Key Light)",
+        "light_class": "DirectionalLight",
+        "light_color": "0xffffff",
+        "intensity": 0.75,
+        "additional_props": "castShadow = true; shadow.mapSize.set(2048, 2048)"
+      }
+    ],
+    "renderer": {
+      "antialias": true,
+      "shadowMapEnabled": true,
+      "shadowMapType": "PCFSoftShadowMap",
+      "toneMapping": "ACESFilmicToneMapping",
+      "outputColorSpace": "SRGBColorSpace"
+    },
+    "camera_controls": "rotation, zoom, and pan",
+    "interactive_description": "Toggle circuit ON/OFF via mouse click on the switch mesh (using Raycaster)",
+    "animated_elements": "glowing particles representing electron flow",
+    "curve_points": [
+      { "x": -3.6, "y": 0.3, "z": 0 },
+      { "x": 3.6, "y": 0.3, "z": 0 }
+    ],
+    "animation_speed": 0.5,
+    "tts_language": "en-US",
+    "tts_rate": 1,
+    "tts_pitch": 1,
+    "narration_texts": [
+      "Welcome to the Ohm's Law simulation.",
+      "Observe the relationship between voltage, current, and resistance.",
+      "Toggle the switch to start or stop the current flow."
+    ]
+  }
+  

@@ -1,10 +1,15 @@
 import json
 import numpy as np
-from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from sentence_transformers import SentenceTransformer
-import os
 import logging
+from sqlalchemy.orm import Session
+import faiss
+from ..database.db_config import SessionLocal
+from ..models import Prompt
+from app.database.database import get_prompts, get_db
+from app.config.settings import settings
+from .prompt_generator import PromptGenerator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,176 +17,251 @@ logger = logging.getLogger(__name__)
 
 class PromptSelector:
     def __init__(self):
-        logger.info("Initializing PromptSelector...")
+        """Initialize the prompt selector with FAISS index and sentence transformer."""
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.prompts_dir = Path(__file__).parent.parent / "prompts"
-        self.embeddings_dir = self.prompts_dir / "embeddings"
-        self.topics_file = self.prompts_dir / "topics.json"
-        self.embeddings_file = self.embeddings_dir / "topics.npy"
+        self.prompts = []
+        self.index = None
+        self.db = None
+        self.prompt_generator = PromptGenerator()
+        self.initialize_index()
         
-        # Create embeddings directory if it doesn't exist
-        self.embeddings_dir.mkdir(exist_ok=True)
-        
-        # Load or create embeddings
-        self.topics = self._load_topics()
-        logger.info(f"Loaded {len(self.topics)} topics from topics.json")
-        self.embeddings = self._load_or_create_embeddings()
-        logger.info("Embeddings loaded/created successfully")
-        
-    def _load_topics(self) -> List[Dict]:
-        """Load topics from JSON file."""
-        logger.info(f"Loading topics from {self.topics_file}")
-        with open(self.topics_file, 'r') as f:
-            topics = json.load(f)
-        logger.info(f"Loaded topics: {[topic['title'] for topic in topics]}")
-        return topics
+        # Default prompts for each subject and provider
+        self.default_prompts = {
+            "physics": {
+                "openai": "You are a physics expert. Create a 3D visualization for the following concept: {topic}",
+                "gemini": "As a physics expert, generate a 3D visualization for: {topic}",
+                "ollama": "Physics expert here. Visualize in 3D: {topic}"
+            },
+            "chemistry": {
+                "openai": "You are a chemistry expert. Create a 3D visualization for the following concept: {topic}",
+                "gemini": "As a chemistry expert, generate a 3D visualization for: {topic}",
+                "ollama": "Chemistry expert here. Visualize in 3D: {topic}"
+            },
+            "biology": {
+                "openai": "You are a biology expert. Create a 3D visualization for the following concept: {topic}",
+                "gemini": "As a biology expert, generate a 3D visualization for: {topic}",
+                "ollama": "Biology expert here. Visualize in 3D: {topic}"
+            },
+            "mathematics": {
+                "openai": "You are a mathematics expert. Create a 3D visualization for the following concept: {topic}",
+                "gemini": "As a mathematics expert, generate a 3D visualization for: {topic}",
+                "ollama": "Mathematics expert here. Visualize in 3D: {topic}"
+            }
+        }
     
-    def _load_or_create_embeddings(self) -> np.ndarray:
-        """Load existing embeddings or create new ones."""
-        if self.embeddings_file.exists():
-            logger.info(f"Loading existing embeddings from {self.embeddings_file}")
-            return np.load(self.embeddings_file)
-        
-        logger.info("Creating new embeddings for topics")
-        # Create embeddings for all topics
-        titles = [topic['title'] for topic in self.topics]
-        embeddings = self.model.encode(titles)
-        
-        # Save embeddings
-        logger.info(f"Saving embeddings to {self.embeddings_file}")
-        np.save(self.embeddings_file, embeddings)
-        return embeddings
+    def initialize_index(self):
+        """Initialize or update the FAISS index with current prompts."""
+        try:
+            # Get all prompts from database
+            self.db = next(get_db())
+            prompts = get_prompts(self.db)
+            
+            logger.info(f"Found {len(prompts)} prompts in database")
+            for prompt in prompts:
+                logger.info(f"Prompt: id={prompt.id}, subject={prompt.subject}, topic={prompt.topic}")
+            
+            if not prompts:
+                logger.warning("No prompts found in database")
+                return
+            
+            # Prepare text for embedding
+            texts = []
+            for prompt in prompts:
+                # Combine relevant fields for semantic search
+                text = f"Subject: {prompt.subject}\n"
+                text += f"Topic: {prompt.topic}\n"
+                text += f"Content: {prompt.content}\n"
+                if prompt.category:
+                    text += f"Category: {prompt.category}\n"
+                if prompt.tags:
+                    text += f"Tags: {', '.join(tag.name for tag in prompt.tags)}\n"
+                texts.append(text)
+                logger.info(f"Prepared text for embedding: {text[:100]}...")
+            
+            # Generate embeddings
+            logger.info("Generating embeddings...")
+            embeddings = self.model.encode(texts, convert_to_numpy=True)
+            embeddings = embeddings.astype('float32')
+            
+            # Normalize embeddings to unit vectors for better similarity search
+            faiss.normalize_L2(embeddings)
+            
+            # Create FAISS index using inner product (cosine similarity)
+            dimension = embeddings.shape[1]
+            self.index = faiss.IndexFlatIP(dimension)  # Inner product for cosine similarity
+            self.index.add(embeddings)
+            
+            # Store prompts for reference
+            self.prompts = list(prompts)
+            
+            logger.info(f"Successfully initialized FAISS index with {len(prompts)} prompts")
+            
+        except Exception as e:
+            logger.error(f"Error initializing FAISS index: {str(e)}")
+            self.index = None
+            self.prompts = []
+            if self.db:
+                self.db.close()
+                self.db = None
     
-    def select_prompt(self, user_query: str, subject: str = None) -> Tuple[str, str]:
+    def select_prompt(self, user_query: str, subject: str = None) -> tuple[str, str]:
         """
-        Select the most appropriate prompt based on user query.
+        Select the most appropriate prompt based on user query using semantic search.
         
         Args:
             user_query: The user's query string
             subject: Optional subject to filter topics by
             
         Returns:
-            Tuple[str, str]: (subject, filename) of the selected prompt
+            Tuple[str, str]: (subject, topic) of the selected prompt
         """
         logger.info(f"Selecting prompt for query: {user_query}, subject: {subject}")
         
-        # Filter topics by subject if provided
-        filtered_topics = self.topics
-        if subject:
-            filtered_topics = [topic for topic in self.topics if topic['subject'] == subject]
-            logger.info(f"Filtered topics for subject {subject}: {[topic['title'] for topic in filtered_topics]}")
+        if not self.prompts or not self.index:
+            logger.info("No prompts available or index not initialized, using generic prompt")
+            return subject or 'physics', 'generic'
         
-        if not filtered_topics:
-            logger.info(f"No topics found for subject {subject}, using generic prompt")
-            return subject or 'physics', f"{subject or 'physics'}/generic.txt"
-        
-        # Create embeddings for filtered topics
-        titles = [topic['title'] for topic in filtered_topics]
-        topic_embeddings = self.model.encode(titles)
-        
-        # Embed the user query
-        query_embedding = self.model.encode([user_query])[0]
-        
-        # Calculate cosine similarities
-        similarities = np.dot(topic_embeddings, query_embedding) / (
-            np.linalg.norm(topic_embeddings, axis=1) * np.linalg.norm(query_embedding)
-        )
-        
-        # Get the best match
-        best_idx = np.argmax(similarities)
-        best_score = similarities[best_idx]
-        best_topic = filtered_topics[best_idx]
-        
-        logger.info(f"Best matching topic: {best_topic['title']} (score: {best_score:.3f})")
-        
-        # Lower threshold to 0.6 for better matching
-        if best_score > 0.6:
-            logger.info(f"Using topic-specific prompt: {best_topic['file']}")
-            return best_topic['subject'], best_topic['file']
-        
-        logger.info("Cosine similarity below threshold, falling back to keyword search")
-        # Fallback to keyword-based search with improved matching
-        query_lower = user_query.lower()
-        for topic in filtered_topics:
-            # Check if the topic title contains the query or vice versa
-            topic_lower = topic['title'].lower()
-            if (query_lower in topic_lower or topic_lower in query_lower or
-                any(word in topic_lower for word in query_lower.split())):
-                logger.info(f"Found keyword match: {topic['title']}")
-                return topic['subject'], topic['file']
-        
-        # If no match found, return generic prompt for the subject
-        logger.info(f"Using generic prompt for subject: {subject}")
-        return subject or 'physics', f"{subject or 'physics'}/generic.txt"
-    
-    def get_prompt_content(self, subject: str, filename: str, topic: str = None) -> str:
-        """Get the content of the selected prompt file."""
-        logger.info(f"Getting prompt content for subject: {subject}, file: {filename}, topic: {topic}")
-        
-        # First try the exact file path
-        prompt_path = self.prompts_dir / subject / filename
-        logger.info(f"Trying path: {prompt_path}")
-        
-        if prompt_path.exists():
-            logger.info(f"Found specific prompt file: {prompt_path}")
-            content = prompt_path.read_text()
-            # Format the content with the topic if needed
-            if topic and '{topic}' in content:
-                logger.info(f"Formatting prompt with topic: {topic}")
-                try:
-                    content = content.format(topic=topic)
-                except Exception as e:
-                    logger.error(f"Error formatting prompt: {e}")
-                    # If formatting fails, return unformatted content
-                    return content
-            return content
-        
-        # If not found, try without the subject prefix in filename
-        if filename.startswith(f"{subject}_"):
-            filename = filename[len(subject)+1:]
-            prompt_path = self.prompts_dir / subject / filename
-            logger.info(f"Trying path without subject prefix: {prompt_path}")
+        try:
+            # Get query embedding and normalize it
+            query_embedding = self.model.encode([user_query])[0]
+            query_embedding = query_embedding.astype('float32').reshape(1, -1)
+            faiss.normalize_L2(query_embedding)  # Normalize query vector
             
-            if prompt_path.exists():
-                logger.info(f"Found specific prompt file: {prompt_path}")
-                content = prompt_path.read_text()
-                # Format the content with the topic if needed
-                if topic and '{topic}' in content:
-                    logger.info(f"Formatting prompt with topic: {topic}")
-                    try:
-                        content = content.format(topic=topic)
-                    except Exception as e:
-                        logger.error(f"Error formatting prompt: {e}")
-                        # If formatting fails, return unformatted content
-                        return content
-                return content
+            # Filter prompts by subject if provided
+            filtered_indices = []
+            if subject:
+                filtered_indices = [i for i, p in enumerate(self.prompts) 
+                                  if p.subject.lower() == subject.lower()]
+                logger.info(f"Found {len(filtered_indices)} prompts for subject {subject}")
+                if not filtered_indices:
+                    logger.info(f"No prompts found for subject {subject}, using generic prompt")
+                    return subject or 'physics', 'generic'
+            
+            # Search in FAISS index
+            k = min(5, len(self.prompts))  # Get top 5 results or all if less than 5
+            if filtered_indices:
+                # Create a subset of the index for the filtered prompts
+                filtered_index = faiss.IndexFlatIP(self.index.d)  # Use inner product for filtered index too
+                filtered_vectors = self.index.reconstruct_batch(filtered_indices)
+                faiss.normalize_L2(filtered_vectors)  # Normalize filtered vectors
+                filtered_index.add(filtered_vectors)
+                similarities, indices = filtered_index.search(query_embedding, k)
+                # Map indices back to original prompt indices
+                indices = [filtered_indices[i] for i in indices[0]]
+            else:
+                similarities, indices = self.index.search(query_embedding, k)
+                indices = indices[0]
+            
+            # Get the best matches
+            best_matches = []
+            for i, idx in enumerate(indices):
+                idx = int(idx)  # Convert to int to ensure proper indexing
+                similarity = float(similarities[0][i])  # Convert to float for score calculation
+                
+                # Skip invalid indices
+                if idx >= len(self.prompts):
+                    continue
+                
+                # Similarity is already in [0, 1] range for normalized vectors
+                # Higher similarity means better match
+                prompt = self.prompts[idx]
+                best_matches.append((prompt, similarity))
+            
+            if not best_matches:
+                logger.info("No valid matches found, using generic prompt")
+                return subject or 'physics', 'generic'
+            
+            # Sort matches by similarity in descending order
+            best_matches.sort(key=lambda x: x[1], reverse=True)
+            
+            # Log all matches for debugging
+            logger.info("Top matches:")
+            for prompt, similarity in best_matches:
+                logger.info(f"Match: {prompt.topic} (similarity: {similarity:.3f}, subject: {prompt.subject})")
+            
+            # Get the best match
+            best_prompt, best_similarity = best_matches[0]
+            
+            # Use a lower threshold for better matching
+            if best_similarity > 0.3:  # Threshold for cosine similarity
+                logger.info(f"Using topic-specific prompt: {best_prompt.topic} (similarity: {best_similarity:.3f})")
+                return best_prompt.subject, best_prompt.topic
+            
+            # If no good match found, try to infer subject from query
+            if not subject:
+                # Check if query contains subject-related keywords
+                subject_keywords = {
+                    'physics': ['physics', 'mechanical', 'electrical', 'force', 'motion', 'energy'],
+                    'chemistry': ['chemistry', 'chemical', 'atomic', 'molecular', 'reaction', 'atom', 'structure'],
+                    'biology': ['biology', 'biological', 'cell', 'organism', 'life'],
+                    'mathematics': ['mathematics', 'math', 'algebra', 'geometry', 'calculus']
+                }
+                
+                for subj, keywords in subject_keywords.items():
+                    if any(keyword in user_query.lower() for keyword in keywords):
+                        logger.info(f"Inferred subject from query: {subj}")
+                        return subj, 'generic'
+            
+            # If still no match, return generic prompt for the subject
+            logger.info(f"Using generic prompt for subject: {subject}")
+            return subject or 'physics', 'generic'
+            
+        except Exception as e:
+            logger.error(f"Error in select_prompt: {str(e)}")
+            # Fallback to generic prompt on error
+            return subject or 'physics', 'generic'
+    
+    def get_prompt_content(self, subject: str, topic: str, user_topic: str = None) -> str:
+        """
+        Get the content of a specific prompt.
         
-        logger.info(f"Specific prompt not found, trying generic prompt for {subject}")
-        # Fallback to generic prompt
-        generic_path = self.prompts_dir / subject / "generic.txt"
-        if generic_path.exists():
-            logger.info(f"Using generic prompt: {generic_path}")
-            content = generic_path.read_text()
-            # Format the content with the topic if needed
-            if topic and '{topic}' in content:
-                logger.info(f"Formatting prompt with topic: {topic}")
-                try:
-                    content = content.format(topic=topic)
-                except Exception as e:
-                    logger.error(f"Error formatting prompt: {e}")
-                    # If formatting fails, return unformatted content
-                    return content
-            return content
+        Args:
+            subject: The subject of the prompt
+            topic: The topic of the prompt
+            user_topic: Optional user topic for logging
+            
+        Returns:
+            str: The prompt content
+        """
+        logger.info(f"Getting prompt content for subject: {subject}, topic: {topic}, user_topic: {user_topic}")
         
-        logger.info("No prompts found, using default prompt")
-        # Ultimate fallback to default prompt
-        return """Create an interactive 3D visualization using Three.js that demonstrates the concept.
-The visualization should be educational and include:
-1. Clear labels and annotations
-2. Interactive elements for user engagement
-3. Proper lighting and camera controls
-4. Responsive design
-5. Scientific accuracy
-6. Visual clarity and intuitive understanding
+        try:
+            # Find the prompt in our stored prompts
+            for prompt in self.prompts:
+                if prompt.subject.lower() == subject.lower() and prompt.topic.lower() == topic.lower():
+                    return prompt.content
+            
+            # If not found, generate a new prompt using the template
+            logger.info(f"Specific prompt not found, generating new prompt for {subject}")
+            return self.prompt_generator.generate_from_topic(
+                topic=user_topic or topic,
+                subject=subject,
+                education_level="High School"  # Default education level
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting prompt content: {str(e)}")
+            return f"Create a 3D visualization for {user_topic or topic} in {subject}."
 
-Return only the complete HTML code with embedded Three.js.""" 
+    def get_prompt(self, subject: str, provider: str, topic: str) -> str:
+        """
+        Get the appropriate prompt for the given subject, provider, and topic.
+        
+        Args:
+            subject: The subject area (physics, chemistry, biology, mathematics)
+            provider: The AI provider (openai, gemini, ollama)
+            topic: The specific topic to visualize
+            
+        Returns:
+            The formatted prompt string
+        """
+        if subject not in self.default_prompts:
+            raise ValueError(f"Unknown subject: {subject}")
+        if provider not in self.default_prompts[subject]:
+            raise ValueError(f"Unknown provider: {provider}")
+            
+        return self.default_prompts[subject][provider].format(topic=topic)
+    
+    def __del__(self):
+        """Clean up database session."""
+        self.db.close() 

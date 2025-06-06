@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str
     GOOGLE_API_KEY: str | None = None
     
+    # Migration Settings
+    RUN_MIGRATIONS: bool = False
+    
     # Model Repository Settings
     SKETCHFAB_API_KEY: str = os.getenv("SKETCHFAB_API_KEY", "")
     S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
@@ -21,7 +24,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     
     # Model Settings
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_MODEL: str = "gpt-4.1-mini"
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:32b"
     GEMINI_MODEL: str = "gemini-2.0-flash"
