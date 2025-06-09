@@ -9,11 +9,9 @@ from ..database.db_config import SessionLocal
 from ..models import Prompt
 from app.database.database import get_prompts, get_db
 from app.config.settings import settings
+from app.config.logging_config import logger
 from .prompt_generator import PromptGenerator
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 class PromptSelector:
     def __init__(self):
@@ -56,30 +54,41 @@ class PromptSelector:
             self.db = next(get_db())
             prompts = get_prompts(self.db)
             
-            logger.info(f"Found {len(prompts)} prompts in database")
+            logger.info("Found prompts in database", extra={
+                "action": "init",
+                "prompt_count": len(prompts)
+            })
+
             for prompt in prompts:
-                logger.info(f"Prompt: id={prompt.id}, subject={prompt.subject}, topic={prompt.topic}")
+                logger.info("Found prompt", extra={
+                    "action": "init",
+                    "prompt_id": prompt.id,
+                    "subject": prompt.subject,
+                    "topic": prompt.topic
+                })
             
             if not prompts:
-                logger.warning("No prompts found in database")
+                logger.warning("No prompts found", extra={
+                    "action": "init"
+                })
                 return
             
             # Prepare text for embedding
             texts = []
             for prompt in prompts:
-                # Combine relevant fields for semantic search
-                text = f"Subject: {prompt.subject}\n"
-                text += f"Topic: {prompt.topic}\n"
-                text += f"Content: {prompt.content}\n"
-                if prompt.category:
-                    text += f"Category: {prompt.category}\n"
-                if prompt.tags:
-                    text += f"Tags: {', '.join(tag.name for tag in prompt.tags)}\n"
+                text = f"{prompt.subject} {prompt.topic} {prompt.content}"
                 texts.append(text)
-                logger.info(f"Prepared text for embedding: {text[:100]}...")
+                logger.info("Prepared text for embedding", extra={
+                    "action": "init",
+                    "text_length": len(text),
+                    "prompt_id": prompt.id
+                })
             
             # Generate embeddings
-            logger.info("Generating embeddings...")
+            logger.info("Generating embeddings", extra={
+                "action": "init",
+                "text_count": len(texts)
+            })
             embeddings = self.model.encode(texts, convert_to_numpy=True)
             embeddings = embeddings.astype('float32')
             
@@ -94,10 +103,17 @@ class PromptSelector:
             # Store prompts for reference
             self.prompts = list(prompts)
             
-            logger.info(f"Successfully initialized FAISS index with {len(prompts)} prompts")
+            logger.info("FAISS index initialized", extra={
+                "action": "init",
+                "index_size": len(prompts)
+            })
             
         except Exception as e:
-            logger.error(f"Error initializing FAISS index: {str(e)}")
+            logger.error("Error initializing FAISS index", extra={
+                "action": "init",
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             self.index = None
             self.prompts = []
             if self.db:
@@ -115,10 +131,17 @@ class PromptSelector:
         Returns:
             Tuple[str, str]: (subject, topic) of the selected prompt
         """
-        logger.info(f"Selecting prompt for query: {user_query}, subject: {subject}")
+        logger.info("Selecting prompt", extra={
+            "action": "select_prompt",
+            "query": user_query,
+            "subject": subject
+        })
         
         if not self.prompts or not self.index:
-            logger.info("No prompts available or index not initialized, using generic prompt")
+            logger.info("No prompts available", extra={
+                "action": "select_prompt",
+                "reason": "no_prompts_or_index"
+            })
             return subject or 'physics', 'generic'
         
         try:
@@ -132,9 +155,17 @@ class PromptSelector:
             if subject:
                 filtered_indices = [i for i, p in enumerate(self.prompts) 
                                   if p.subject.lower() == subject.lower()]
-                logger.info(f"Found {len(filtered_indices)} prompts for subject {subject}")
+                logger.info("Found prompts for subject", extra={
+                    "action": "select_prompt",
+                    "subject": subject,
+                    "prompt_count": len(filtered_indices)
+                })
                 if not filtered_indices:
-                    logger.info(f"No prompts found for subject {subject}, using generic prompt")
+                    logger.info("No prompts found for subject", extra={
+                        "action": "select_prompt",
+                        "subject": subject,
+                        "reason": "no_subject_prompts"
+                    })
                     return subject or 'physics', 'generic'
             
             # Search in FAISS index
@@ -207,7 +238,13 @@ class PromptSelector:
             return subject or 'physics', 'generic'
             
         except Exception as e:
-            logger.error(f"Error in select_prompt: {str(e)}")
+            logger.error("Error selecting prompt", extra={
+                "action": "select_prompt",
+                "query": user_query,
+                "subject": subject,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             # Fallback to generic prompt on error
             return subject or 'physics', 'generic'
     

@@ -19,6 +19,8 @@ from datetime import datetime
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from sqlalchemy.orm import Session
+import logging.config
+from bs4 import BeautifulSoup
 
 from app.services.prompt_selector import PromptSelector
 from app.services.model_repository import ModelRepository
@@ -41,10 +43,7 @@ from app.database.database import (
 )
 from app.migrations.add_category_and_tags import run_migration
 from app.services.prompt_generator import PromptGenerator
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from app.config.logging_config import logger
 
 # Load environment variables
 load_dotenv()
@@ -65,9 +64,15 @@ app.add_middleware(
 static_dir = Path("static")
 if static_dir.exists() and static_dir.is_dir():
     app.mount("/static", StaticFiles(directory="static"), name="static")
-    logger.info("Mounted static files directory")
+    logger.info("Mounted static files directory", extra={
+        "directory": str(static_dir),
+        "action": "mount_static_files"
+    })
 else:
-    logger.warning("Static files directory not found. Static file serving is disabled.")
+    logger.warning("Static files directory not found", extra={
+        "directory": str(static_dir),
+        "action": "mount_static_files"
+    })
 
 # Initialize services
 prompt_selector = PromptSelector()
@@ -79,7 +84,10 @@ if settings.OPENAI_API_KEY:
     client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 else:
     client = None
-    logger.warning("OpenAI API key not found. OpenAI provider will not be available.")
+    logger.warning("OpenAI API key not found", extra={
+        "provider": "openai",
+        "action": "init_provider"
+    })
 
 # Initialize Google Gemini client if API key is available
 if settings.GOOGLE_API_KEY:
@@ -87,7 +95,10 @@ if settings.GOOGLE_API_KEY:
     gemini_model = genai.GenerativeModel(settings.GEMINI_MODEL)
 else:
     gemini_model = None
-    logger.warning("Google API key not found. Gemini provider will not be available.")
+    logger.warning("Google API key not found", extra={
+        "provider": "gemini",
+        "action": "init_provider"
+    })
 
 # Request schemas
 class ComponentConfig(BaseModel):
@@ -199,30 +210,6 @@ class EnhancedPromptResponse(BaseModel):
     animated_elements: str
     narration_texts: List[str]
 
-# Shared system prompt for all providers
-SYSTEM_PROMPT = """You are a code generation assistant that converts natural language descriptions of educational interactive 3D scenes into standalone embeddable HTML files.
-
-Your goal is to create 3D visualizations that help students quickly and intuitively understand core scientific or engineering concepts.
-
-You must:
-
-* Use only HTML, CSS, and JavaScript (ES6).
-* Use browser-compatible Three.js modules via CDN imports using full URLs from [esm.sh](https://esm.sh), which rewrites internal imports for browser compatibility.
-* Always import Three.js and its extensions (like OrbitControls) using esm.sh with versioned paths, for example:
-  * import * as THREE from 'https://esm.sh/three@0.155.0';
-  * import { OrbitControls } from 'https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls';
-
-You must ensure that:
-* The scene is educational, scientifically accurate, and clearly demonstrates the user-provided concept.
-* Each component must be clearly identifiable and photorealistic.
-* Include labels or visual cues (arrows, color changes, flows, toggles) that help explain what's happening.
-* Animate key behaviors (e.g., current flow, wave motion, collisions).
-* Structure the layout for maximum visual clarity, avoiding clutter.
-* The scene must be interactive and fully 3D (rotate, zoom, pan via OrbitControls).
-* The output must be a single complete valid HTML file and fully runnable inside an <iframe> and nothing else. Do not include explanations, tags like <think>, or commentary — only the HTML.
-
-Now, given the following user prompt, return only a complete embeddable HTML document that implements it:
-"""
 
 def parse_html_content(text: str) -> str:
     """
@@ -244,13 +231,19 @@ def parse_html_content(text: str) -> str:
             html_start = text.find("<html>")
         
         if html_start == -1:
-            logger.error("No HTML content found in the response")
+            logger.error("No HTML content found in the response", extra={
+                "action": "validate_html",
+                "response_length": len(text)
+            })
             return ""
         
         # Find the last </html> tag
         html_end = text.rfind("</html>")
         if html_end == -1:
-            logger.error("No closing HTML tag found in the response")
+            logger.error("No closing HTML tag found in the response", extra={
+                "action": "validate_html",
+                "content_length": len(text)
+            })
             return ""
         
         # Extract the HTML content
@@ -258,7 +251,19 @@ def parse_html_content(text: str) -> str:
         
         # Validate that it's proper HTML
         if not html_content.strip().startswith(("<!DOCTYPE html>", "<html")):
-            logger.error("Invalid HTML content in the response")
+            logger.error("Invalid HTML content in the response", extra={
+                "action": "validate_html",
+                "error": "No valid HTML tag found"
+            })
+            return ""
+        
+        try:
+            BeautifulSoup(html_content, "html.parser")
+        except Exception as e:
+            logger.error("Invalid HTML content", extra={
+                "action": "validate_html",
+                "error": str(e)
+            })
             return ""
         
         return html_content
@@ -271,17 +276,31 @@ def parse_html_content(text: str) -> str:
 async def generate_visualization(request: GenerateRequest, db: Session = Depends(get_db)):
     """Generate a 3D visualization based on the topic."""
     try:
-        logger.info("Starting visualization generation")
+        logger.info("Starting visualization generation", extra={
+            "action": "generate_visualization",
+            "has_config": bool(request.config)
+        })
         logger.debug(f"Request config: {json.dumps(request.config.model_dump() if request.config else None, indent=2)}")
 
         # Generate the prompt using either custom config or basic topic info
         if request.config:
-            logger.info("Using provided configuration")
+            logger.info("Using provided configuration", extra={
+                "action": "generate_visualization",
+                "config_type": "provided"
+            })
             config_dict = request.config.model_dump()
-            logger.debug(f"Converted config to dict: {json.dumps(config_dict, indent=2)}")
+            logger.debug("Configuration details", extra={
+                "action": "generate_visualization",
+                "config": config_dict
+            })
             prompt_content = prompt_generator.generate_prompt(config_dict)
         else:
-            logger.info("Using basic topic info")
+            logger.info("Using basic topic info", extra={
+                "action": "generate_visualization",
+                "config_type": "basic",
+                "topic": request.topic,
+                "subject": request.subject
+            })
             prompt_content = prompt_generator.generate_from_topic(
                 request.topic,
                 request.subject,
@@ -303,6 +322,10 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
 
         if request.provider == "openai":
             if not client:
+                logger.error("OpenAI API key not configured", extra={
+                    "action": "generate_visualization",
+                    "provider": "openai"
+                })
                 raise HTTPException(status_code=400, detail="OpenAI API key not configured")
             
             # Generate with OpenAI
@@ -322,11 +345,15 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                     f"{settings.OLLAMA_BASE_URL}/api/generate",
                     json={
                         "model": settings.OLLAMA_MODEL,
-                        "prompt": f"{SYSTEM_PROMPT}\n\n{prompt_content}",
+                        "prompt": f"{prompt_content}",
                         "stream": settings.STREAM
                     }
                 ) as response:
                     if response.status != 200:
+                        logger.error(f"Ollama request failed with status {response.status}", extra={
+                            "action": "generate_visualization",
+                            "provider": "ollama"
+                        })
                         raise HTTPException(status_code=500, detail="Failed to generate with Ollama")
                     
                     result = await response.json()
@@ -334,10 +361,14 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             
         elif request.provider == "gemini":
             if not gemini_model:
+                logger.error("Google API key not configured", extra={
+                    "action": "generate_visualization",
+                    "provider": "gemini"
+                })
                 raise HTTPException(status_code=400, detail="Google API key not configured")
             
             response = await gemini_model.generate_content(
-                f"{SYSTEM_PROMPT}\n\n{prompt_content}",
+                f"{prompt_content}",
                 safety_settings={
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
                     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
@@ -349,12 +380,36 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             generated_text = response.text
             
         else:
+            logger.error(f"Invalid provider specified: {request.provider}", extra={
+                "action": "generate_visualization",
+                "provider": request.provider
+            })
             raise HTTPException(status_code=400, detail="Invalid provider specified")
         
         # Parse the HTML content
         html_content = parse_html_content(generated_text)
         if not html_content:
-            raise HTTPException(status_code=500, detail="Failed to generate valid HTML content")
+            logger.error("No HTML content found", extra={
+                "action": "validate_html",
+                "response_length": len(response)
+            })
+            raise HTTPException(status_code=400, detail="No HTML content found in the response")
+        
+        if not html_content.endswith("</html>"):
+            logger.error("No closing HTML tag found", extra={
+                "action": "validate_html",
+                "content_length": len(html_content)
+            })
+            raise HTTPException(status_code=400, detail="No closing HTML tag found in the response")
+
+        try:
+            BeautifulSoup(html_content, "html.parser")
+        except Exception as e:
+            logger.error("Invalid HTML content", extra={
+                "action": "validate_html",
+                "error": str(e)
+            })
+            raise HTTPException(status_code=400, detail="Invalid HTML content in the response")
         
         # Save to history
         history_entry = {
@@ -370,7 +425,11 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
         return {"html": html_content}
         
     except Exception as e:
-        logger.error(f"Error generating visualization: {str(e)}")
+        logger.error("Error generating visualization", extra={
+            "action": "generate_visualization",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/models/{subject}")
@@ -380,7 +439,12 @@ async def get_available_models(subject: str):
         models = model_repository.get_models(subject)
         return {"models": models}
     except Exception as e:
-        logger.error(f"Error getting models for subject {subject}: {str(e)}")
+        logger.error("Error getting models", extra={
+            "action": "get_models",
+            "subject": subject,
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/history")
@@ -400,7 +464,11 @@ async def get_history(db: Session = Depends(get_db)):
             for entry in history
         ]}
     except Exception as e:
-        logger.error(f"Error getting history: {str(e)}")
+        logger.error("Error getting history", extra={
+            "action": "get_history",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/history/{entry_id}")
@@ -419,7 +487,12 @@ async def get_history_entry(entry_id: str, db: Session = Depends(get_db)):
             "timestamp": entry.timestamp.isoformat()
         }
     except Exception as e:
-        logger.error(f"Error getting history entry: {str(e)}")
+        logger.error("Error getting history entry", extra={
+            "action": "get_history_entry",
+            "entry_id": entry_id,
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/history/{entry_id}")
@@ -429,7 +502,12 @@ async def delete_history_entry(entry_id: str, db: Session = Depends(get_db)):
         remove_history_entry(db, entry_id)
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error deleting history entry: {str(e)}")
+        logger.error("Error deleting history entry", extra={
+            "action": "delete_history_entry",
+            "entry_id": entry_id,
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/admin/prompts/{prompt_id}")
@@ -482,7 +560,11 @@ async def update_prompt_endpoint(
         }
         
     except Exception as e:
-        logger.error(f"Error updating prompt: {str(e)}")
+        logger.error("Error updating prompt", extra={
+            "action": "update_prompt",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/prompts")
@@ -510,7 +592,11 @@ async def get_all_prompts(
             ]
         }
     except Exception as e:
-        logger.error(f"Error getting prompts: {str(e)}")
+        logger.error("Error getting prompts", extra={
+            "action": "get_all_prompts",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/prompts")
@@ -553,7 +639,11 @@ async def create_prompt_endpoint(
         }
         
     except Exception as e:
-        logger.error(f"Error creating prompt: {str(e)}")
+        logger.error("Error creating prompt", extra={
+            "action": "create_prompt",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/admin/prompts/{prompt_id}")
@@ -585,7 +675,12 @@ async def delete_prompt_endpoint(
         return {"status": "success"}
         
     except Exception as e:
-        logger.error(f"Error deleting prompt: {str(e)}")
+        logger.error("Error deleting prompt", extra={
+            "action": "delete_prompt",
+            "prompt_id": prompt_id,
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/prompts/{prompt_id}/duplicate")
@@ -611,7 +706,11 @@ async def duplicate_prompt_endpoint(
             "tags": [tag.name for tag in duplicated.tags]
         }
     except Exception as e:
-        logger.error(f"Error duplicating prompt: {str(e)}")
+        logger.error("Error duplicating prompt", extra={
+            "action": "duplicate_prompt",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/prompts/batch-delete")
@@ -633,7 +732,11 @@ async def batch_delete_prompts_endpoint(
         
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error deleting prompts: {str(e)}")
+        logger.error("Error deleting prompts", extra={
+            "action": "batch_delete_prompts",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/admin/prompts/export")
@@ -643,7 +746,11 @@ async def export_prompts_endpoint(db: Session = Depends(get_db)):
         prompts_data = export_prompts(db)
         return {"prompts": prompts_data}
     except Exception as e:
-        logger.error(f"Error exporting prompts: {str(e)}")
+        logger.error("Error exporting prompts", extra={
+            "action": "export_prompts",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/admin/prompts/import")
@@ -661,29 +768,38 @@ async def import_prompts_endpoint(
             )
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Error importing prompts: {str(e)}")
+        logger.error("Error importing prompts", extra={
+            "action": "import_prompts",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/enhance-prompt")
 async def enhance_prompt(request: GenerateRequest):
     """Enhance a basic prompt into a detailed configuration using LLM."""
     try:
-        logger.info(f"Enhancing prompt for topic: '{request.topic}' in subject: {request.subject} using provider: {request.provider}")
+        logger.info("Enhancing prompt", extra={
+            "action": "enhance_prompt",
+            "topic": request.topic,
+            "subject": request.subject,
+            "provider": request.provider
+        })
         
         # Create a prompt for the LLM to enhance the concept
         enhancement_prompt = f"""Given the following concept prompt: "{request.topic}" in the subject of {request.subject},
         generate a detailed configuration for a 3D visualization. Return the response as a JSON object with the following structure.
         IMPORTANT: Keep all text fields concise (max 200 characters) to avoid truncation.
         {{
-            "topic_name": "A short, concise name for the topic (max 50 chars)",
-            "key_concepts": "Main concepts to be visualized (max 200 chars)",
-            "education_level": "High School",
+            "topic_name": "A short, concise name for the topic (max 20 chars)",
+            "key_concepts": "Comma separated main concepts to be visualized (max 200 chars)",
+            "education_level": "chose between Elementary, Middle School, High School or College",
             "learning_objectives": "What students will learn (max 200 chars)",
-            "interactive_features": "What users can interact with (max 200 chars)",
+            "interactive_features": "What users can interact with in the scene (max 200 chars)",
             "components": [
                 {{
-                    "component_name": "Name of a 3D component (max 50 chars)",
-                    "component_description": "Description of what this component represents (max 100 chars)"
+                    "component_name": "Name of a 3D component required in the 3D scene (max 50 chars)",
+                    "component_description": "Description of what this component represents in the 3D scene (max 100 chars)"
                 }}
             ],
             "materials": [
@@ -703,9 +819,10 @@ async def enhance_prompt(request: GenerateRequest):
                 }}
             ],
             "interactive_description": "How users can interact with the visualization (max 200 chars)",
-            "animated_elements": "What elements should be animated and how (max 200 chars)",
+            "animated_elements": "What components should be animated and how (max 200 chars)",
             "narration_texts": [
-                "Text to be narrated during the visualization (max 100 chars each)"
+                "Text to be narrated during the start of the visualization as an introduction to the topic (max 200 chars)",
+                "Other texts to be narrated during the visualization as a part of the user interaction (max 100 chars each)"
             ]
         }}
 
@@ -722,10 +839,16 @@ async def enhance_prompt(request: GenerateRequest):
 
         if request.provider == "openai":
             if not client:
-                logger.error("OpenAI API key not configured")
+                logger.error("OpenAI API key not configured", extra={
+                    "action": "enhance_prompt",
+                    "provider": "openai"
+                })
                 raise HTTPException(status_code=400, detail="OpenAI API key not configured")
             
-            logger.info("Using OpenAI for prompt enhancement")
+            logger.info("Using OpenAI for prompt enhancement", extra={
+                "action": "enhance_prompt",
+                "provider": "openai"
+            })
             response = await client.chat.completions.create(
                 model=settings.OPENAI_MODEL,
                 messages=[
@@ -735,7 +858,11 @@ async def enhance_prompt(request: GenerateRequest):
             )
             
             generated_text = response.choices[0].message.content
-            logger.debug(f"OpenAI response received: {generated_text[:200]}...")
+            logger.debug("OpenAI response received", extra={
+                "action": "enhance_prompt",
+                "provider": "openai",
+                "response_length": len(generated_text)
+            })
             
             # Clean the response to ensure it's valid JSON
             try:
@@ -763,19 +890,17 @@ async def enhance_prompt(request: GenerateRequest):
                     # Truncate long text fields
                     for field in ["topic_name", "key_concepts", "learning_objectives", "interactive_features", 
                                 "interactive_description", "animated_elements"]:
-                        if field in enhanced_config and len(enhanced_config[field]) > 200:
-                            enhanced_config[field] = enhanced_config[field][:197] + "..."
+                        if field in enhanced_config:
+                            enhanced_config[field] = enhanced_config[field]
                     
                     # Truncate component descriptions
                     for component in enhanced_config.get("components", []):
-                        if "component_description" in component and len(component["component_description"]) > 100:
-                            component["component_description"] = component["component_description"][:97] + "..."
+                        if "component_description" in component:
+                            # Removed truncation logic
+                            pass
                     
                     # Truncate narration texts
-                    enhanced_config["narration_texts"] = [
-                        text[:97] + "..." if len(text) > 100 else text
-                        for text in enhanced_config.get("narration_texts", [])
-                    ]
+                    enhanced_config["narration_texts"] = [text for text in enhanced_config.get("narration_texts", [])]
                     
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON structure: {str(e)}")
@@ -790,7 +915,10 @@ async def enhance_prompt(request: GenerateRequest):
                 raise HTTPException(status_code=500, detail=f"Failed to parse LLM response as JSON: {str(e)}")
             
         elif request.provider == "ollama":
-            logger.info("Using Ollama for prompt enhancement")
+            logger.info("Using Ollama for prompt enhancement", extra={
+                "action": "enhance_prompt",
+                "provider": "ollama"
+            })
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{settings.OLLAMA_BASE_URL}/api/generate",
@@ -801,12 +929,19 @@ async def enhance_prompt(request: GenerateRequest):
                     }
                 ) as response:
                     if response.status != 200:
-                        logger.error(f"Ollama request failed with status {response.status}")
+                        logger.error(f"Ollama request failed with status {response.status}", extra={
+                            "action": "enhance_prompt",
+                            "provider": "ollama"
+                        })
                         raise HTTPException(status_code=500, detail="Failed to generate with Ollama")
                     
                     result = await response.json()
                     generated_text = result.get("response", "")
-                    logger.debug(f"Ollama response received: {generated_text[:200]}...")
+                    logger.debug("Ollama response received", extra={
+                        "action": "enhance_prompt",
+                        "provider": "ollama",
+                        "response_length": len(generated_text)
+                    })
                     
                     try:
                         # Clean the response to ensure it's valid JSON
@@ -825,10 +960,16 @@ async def enhance_prompt(request: GenerateRequest):
             
         elif request.provider == "gemini":
             if not gemini_model:
-                logger.error("Google API key not configured")
+                logger.error("Google API key not configured", extra={
+                    "action": "enhance_prompt",
+                    "provider": "gemini"
+                })
                 raise HTTPException(status_code=400, detail="Google API key not configured")
             
-            logger.info("Using Gemini for prompt enhancement")
+            logger.info("Using Gemini for prompt enhancement", extra={
+                "action": "enhance_prompt",
+                "provider": "gemini"
+            })
             response = await gemini_model.generate_content(
                 enhancement_prompt,
                 safety_settings={
@@ -840,7 +981,11 @@ async def enhance_prompt(request: GenerateRequest):
             )
             
             generated_text = response.text
-            logger.debug(f"Gemini response received: {generated_text[:200]}...")
+            logger.debug("Gemini response received", extra={
+                "action": "enhance_prompt",
+                "provider": "gemini",
+                "response_length": len(generated_text)
+            })
             
             try:
                 # Clean the response to ensure it's valid JSON
@@ -858,11 +1003,17 @@ async def enhance_prompt(request: GenerateRequest):
                 raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response as JSON: {str(e)}")
             
         else:
-            logger.error(f"Invalid provider specified: {request.provider}")
+            logger.error(f"Invalid provider specified: {request.provider}", extra={
+                "action": "enhance_prompt",
+                "provider": request.provider
+            })
             raise HTTPException(status_code=400, detail="Invalid provider specified")
 
         # Log the enhanced configuration
-        logger.info("Successfully generated enhanced configuration")
+        logger.info("Successfully generated enhanced configuration", extra={
+            "action": "enhance_prompt",
+            "provider": request.provider
+        })
         logger.debug(f"Enhanced configuration: {json.dumps(enhanced_config, indent=2)}")
 
         # Validate and return the enhanced configuration
@@ -872,7 +1023,11 @@ async def enhance_prompt(request: GenerateRequest):
         logger.error(f"Failed to parse LLM response as JSON: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to parse LLM response as JSON")
     except Exception as e:
-        logger.error(f"Error enhancing prompt: {str(e)}")
+        logger.error("Error enhancing prompt", extra={
+            "action": "enhance_prompt",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         logger.exception("Full traceback:")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -883,24 +1038,42 @@ async def startup_event():
         # Test database connection
         db = next(get_db())
         prompts = get_prompts(db)
-        logger.info(f"Database connection successful. Found {len(prompts)} prompts.")
+        logger.info("Database connection successful", extra={
+            "action": "init_database",
+            "prompt_count": len(prompts)
+        })
         for prompt in prompts:
-            logger.info(f"Prompt: id={prompt.id}, subject={prompt.subject}, topic={prompt.topic}")
+            logger.info("Found prompt", extra={
+                "action": "init_database",
+                "prompt_id": prompt.id,
+                "subject": prompt.subject,
+                "topic": prompt.topic
+            })
         
         if settings.RUN_MIGRATIONS:
-            logger.info("Running database migrations...")
+            logger.info("Running database migrations...", extra={
+                "action": "run_migrations"
+            })
             migrate_from_json()
             run_migration()  # Run the new migration
         else:
-            logger.info("Skipping database migrations. Set RUN_MIGRATIONS=1 to run migrations.")
+            logger.info("Skipping database migrations. Set RUN_MIGRATIONS=1 to run migrations.", extra={
+                "action": "skip_migrations"
+            })
             
         # Initialize prompt selector
         global prompt_selector
         prompt_selector = PromptSelector()
-        logger.info("Prompt selector initialized")
+        logger.info("Prompt selector initialized", extra={
+            "action": "init_prompt_selector"
+        })
         
     except Exception as e:
-        logger.error(f"Error during startup: {str(e)}")
+        logger.error("Error during startup", extra={
+            "action": "startup",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise
 
 if __name__ == "__main__":

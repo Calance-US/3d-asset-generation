@@ -3,10 +3,8 @@ import json
 from typing import List, Dict, Optional
 from pathlib import Path
 from ..config.settings import settings
-import logging
+from app.config.logging_config import logger
 
-# Configure logging
-logger = logging.getLogger(__name__)
 
 class ModelRepository:
     def __init__(self):
@@ -43,7 +41,12 @@ class ModelRepository:
             return self.default_models.get(subject, self.default_models["physics"])
             
         except Exception as e:
-            logger.error(f"Error getting models for subject {subject}: {str(e)}")
+            logger.error("Error getting models", extra={
+                "action": "get_models",
+                "subject": subject,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             return self.default_models.get(subject, self.default_models["physics"])
 
     def get_model_path(self, model_name: str, subject: str) -> Optional[str]:
@@ -63,7 +66,13 @@ class ModelRepository:
                 return str(model_path)
             return None
         except Exception as e:
-            logger.error(f"Error getting model path for {model_name} in {subject}: {str(e)}")
+            logger.error("Error getting model path", extra={
+                "action": "get_model_path",
+                "model_name": model_name,
+                "subject": subject,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             return None
 
     def add_model(self, model_name: str, subject: str, model_file: bytes) -> bool:
@@ -87,7 +96,13 @@ class ModelRepository:
                 f.write(model_file)
             return True
         except Exception as e:
-            logger.error(f"Error adding model {model_name} for {subject}: {str(e)}")
+            logger.error("Error adding model", extra={
+                "action": "add_model",
+                "model_name": model_name,
+                "subject": subject,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             return False
 
     def remove_model(self, model_name: str, subject: str) -> bool:
@@ -108,5 +123,11 @@ class ModelRepository:
                 return True
             return False
         except Exception as e:
-            logger.error(f"Error removing model {model_name} from {subject}: {str(e)}")
+            logger.error("Error removing model", extra={
+                "action": "remove_model",
+                "model_name": model_name,
+                "subject": subject,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             return False 

@@ -1,5 +1,7 @@
 import openai
 from app.config.settings import settings
+from app.config.logging_config import logger
+from app.services.model_repository import ModelRepository
 
 # Set the API key from settings
 openai.api_key = settings.OPENAI_API_KEY
@@ -13,4 +15,4 @@ response = openai.chat.completions.create(
     ],
     max_tokens=100
 )
-print(response.choices[0].message.content) 
+logger.info("Model response: %s", response.choices[0].message.content) 

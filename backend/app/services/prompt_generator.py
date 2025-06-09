@@ -1,11 +1,8 @@
 import json
-import logging
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from typing import Dict, Any, Optional
-
-# Configure logging
-logger = logging.getLogger(__name__)
+from app.config.logging_config import logger
 
 class PromptGenerator:
     def __init__(self):
@@ -15,17 +12,16 @@ class PromptGenerator:
         self.schema_path = self.base_path / "template.json"
         
         # Initialize Jinja2 environment
-        self.env = Environment(
-            loader=FileSystemLoader(str(self.base_path)),
-            trim_blocks=True,
-            lstrip_blocks=True
-        )
+        self.env = Environment(loader=FileSystemLoader(str(self.base_path)))
         
         # Load template and schema
         self.template = self._load_template()
         self.schema = self._load_schema()
         
-        logger.info(f"Initialized PromptGenerator with template directory: {self.base_path}")
+        logger.info("Initialized PromptGenerator", extra={
+            "action": "init",
+            "template_directory": str(self.base_path)
+        })
 
     def generate_prompt(self, config: Dict[str, Any]) -> str:
         """
@@ -38,30 +34,52 @@ class PromptGenerator:
             str: The generated prompt
         """
         try:
-            logger.info("Generating prompt with configuration")
-            logger.debug(f"Input configuration: {json.dumps(config, indent=2)}")
+            logger.info("Generating prompt", extra={
+                "action": "generate_prompt",
+                "has_config": bool(config)
+            })
+            logger.debug("Input configuration", extra={
+                "action": "generate_prompt",
+                "config": config
+            })
             
             # Merge with defaults
             merged_config = self._merge_defaults(config)
-            logger.debug(f"Merged configuration: {json.dumps(merged_config, indent=2)}")
+            logger.debug("Merged configuration", extra={
+                "action": "generate_prompt",
+                "config": merged_config
+            })
             
             # Verify renderer configuration
             if "renderer" not in merged_config:
-                logger.error("Renderer configuration missing after merge")
+                logger.error("Renderer configuration missing", extra={
+                    "action": "generate_prompt",
+                    "config_keys": list(merged_config.keys())
+                })
                 raise ValueError("Renderer configuration is required")
             
-            logger.debug(f"Renderer configuration: {json.dumps(merged_config['renderer'], indent=2)}")
+            logger.debug("Renderer configuration", extra={
+                "action": "generate_prompt",
+                "renderer_config": merged_config["renderer"]
+            })
             
             # Render template using Jinja2
             template = self.env.from_string(self.template)
             prompt = template.render(**merged_config)
             
-            logger.info("Prompt generated successfully")
+            logger.info("Prompt generated", extra={
+                "action": "generate_prompt",
+                "prompt_length": len(prompt)
+            })
             return prompt
             
         except Exception as e:
-            logger.error(f"Error generating prompt: {str(e)}")
-            logger.exception("Full traceback:")
+            logger.error("Error generating prompt", extra={
+                "action": "generate_prompt",
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+            logger.exception("Full traceback")
             raise
 
     def generate_from_topic(self, topic: str, subject: str, education_level: str = "High School") -> str:
@@ -77,7 +95,12 @@ class PromptGenerator:
             str: The generated prompt
         """
         try:
-            logger.info(f"Generating prompt for topic: {topic}, subject: {subject}, education_level: {education_level}")
+            logger.info("Generating prompt from topic", extra={
+                "action": "generate_from_topic",
+                "topic": topic,
+                "subject": subject,
+                "education_level": education_level
+            })
             
             # Create basic configuration
             config = {
@@ -110,7 +133,13 @@ class PromptGenerator:
             return self.generate_prompt(config)
             
         except Exception as e:
-            logger.error(f"Error generating prompt from topic: {str(e)}")
+            logger.error("Error generating prompt from topic", extra={
+                "action": "generate_from_topic",
+                "topic": topic,
+                "subject": subject,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             raise
 
     def _merge_defaults(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -125,7 +154,10 @@ class PromptGenerator:
             Dict[str, Any]: The merged configuration
         """
         try:
-            logger.debug("Merging configuration with defaults")
+            logger.debug("Merging configuration with defaults", extra={
+                "action": "merge_with_defaults",
+                "input_config": config
+            })
             logger.debug(f"Input config: {json.dumps(config, indent=2)}")
             
             def is_empty(value: Any) -> bool:
@@ -167,12 +199,19 @@ class PromptGenerator:
             if merged["renderer"]["outputColorSpace"] == "sRGB":
                 merged["renderer"]["outputColorSpace"] = "SRGBColorSpace"
             
-            logger.debug(f"Merged configuration: {json.dumps(merged, indent=2)}")
+            logger.debug("Merged configuration", extra={
+                "action": "merge_with_defaults",
+                "merged_config": merged
+            })
             return merged
             
         except Exception as e:
-            logger.error(f"Error merging configurations: {str(e)}")
-            logger.exception("Full traceback:")
+            logger.error("Error merging configurations", extra={
+                "action": "merge_with_defaults",
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+            logger.exception("Full traceback")
             raise
 
     def _load_template(self) -> str:
@@ -181,7 +220,12 @@ class PromptGenerator:
             with open(self.template_path, 'r') as f:
                 return f.read()
         except Exception as e:
-            logger.error(f"Error loading template: {str(e)}")
+            logger.error("Error loading template", extra={
+                "action": "load_template",
+                "template_name": self.template_path,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             raise
 
     def _load_schema(self) -> dict:
@@ -190,5 +234,10 @@ class PromptGenerator:
             with open(self.schema_path, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            logger.error(f"Error loading schema: {str(e)}")
+            logger.error("Error loading schema", extra={
+                "action": "load_schema",
+                "schema_name": self.schema_path,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
             raise 

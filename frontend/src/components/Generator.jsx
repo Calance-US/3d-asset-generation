@@ -516,7 +516,15 @@ export default function Generator() {
                           <label className="block text-sm font-medium text-gray-300">
                             Key Concepts
                           </label>
-                          <p className="mt-1 text-sm text-gray-400">{config?.key_concepts || "No key concepts defined"}</p>
+                          <textarea
+                            value={config.key_concepts}
+                            onChange={(e) => setConfig(prev => ({ ...prev, key_concepts: e.target.value }))}
+                            className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                            rows={3}
+                            placeholder="Enter key concepts..."
+                            aria-label="Key Concepts"
+                            title="Key Concepts"
+                          />
                         </div>
 
                         <div>
@@ -527,6 +535,8 @@ export default function Generator() {
                             value={config.education_level}
                             onChange={(e) => setConfig(prev => ({ ...prev, education_level: e.target.value }))}
                             className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                            aria-label="Education Level"
+                            title="Education Level"
                           >
                             <option value="Elementary">Elementary</option>
                             <option value="Middle School">Middle School</option>
@@ -539,14 +549,30 @@ export default function Generator() {
                           <label className="block text-sm font-medium text-gray-300">
                             Learning Objectives
                           </label>
-                          <p className="mt-1 text-sm text-gray-400">{config?.learning_objectives || "No learning objectives defined"}</p>
+                          <textarea
+                            value={config.learning_objectives}
+                            onChange={(e) => setConfig(prev => ({ ...prev, learning_objectives: e.target.value }))}
+                            className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                            rows={3}
+                            placeholder="Enter learning objectives..."
+                            aria-label="Learning Objectives"
+                            title="Learning Objectives"
+                          />
                         </div>
 
                         <div>
                           <label className="block text-sm font-medium text-gray-300">
                             Interactive Features
                           </label>
-                          <p className="mt-1 text-sm text-gray-400">{config?.interactive_features || "No interactive features defined"}</p>
+                          <textarea
+                            value={config.interactive_features}
+                            onChange={(e) => setConfig(prev => ({ ...prev, interactive_features: e.target.value }))}
+                            className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                            rows={3}
+                            placeholder="Enter interactive features..."
+                            aria-label="Interactive Features"
+                            title="Interactive Features"
+                          />
                         </div>
 
                         {/* Components Section */}
@@ -608,63 +634,81 @@ export default function Generator() {
                             Materials
                           </label>
                           {config.materials.map((material, index) => (
-                            <div key={index} className="flex gap-2 mb-2">
-                              <input
-                                type="text"
-                                value={material.material_name}
-                                onChange={(e) => {
-                                  const newMaterials = [...config.materials];
-                                  newMaterials[index] = { ...material, material_name: e.target.value };
-                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
-                                }}
-                                placeholder="Material Name"
-                                className="flex-1 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                              />
-                              <input
-                                type="text"
-                                value={material.color}
-                                onChange={(e) => {
-                                  const newMaterials = [...config.materials];
-                                  newMaterials[index] = { ...material, color: e.target.value };
-                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
-                                }}
-                                placeholder="Color (hex)"
-                                className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                              />
-                              <input
-                                type="number"
-                                value={material.metalness}
-                                onChange={(e) => {
-                                  const newMaterials = [...config.materials];
-                                  newMaterials[index] = { ...material, metalness: parseFloat(e.target.value) };
-                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
-                                }}
-                                placeholder="Metalness"
-                                className="w-24 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                                step="0.1"
-                                min="0"
-                                max="1"
-                              />
-                              <input
-                                type="number"
-                                value={material.roughness}
-                                onChange={(e) => {
-                                  const newMaterials = [...config.materials];
-                                  newMaterials[index] = { ...material, roughness: parseFloat(e.target.value) };
-                                  setConfig(prev => ({ ...prev, materials: newMaterials }));
-                                }}
-                                placeholder="Roughness"
-                                className="w-24 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                                step="0.1"
-                                min="0"
-                                max="1"
-                              />
+                            <div key={index} className="flex gap-4 mb-4 items-end bg-gray-800 p-3 rounded-lg">
+                              <div className="flex-1">
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`material-name-${index}`}>Material Name</label>
+                                <input
+                                  id={`material-name-${index}`}
+                                  type="text"
+                                  value={material.material_name}
+                                  onChange={(e) => {
+                                    const newMaterials = [...config.materials];
+                                    newMaterials[index] = { ...material, material_name: e.target.value };
+                                    setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                  }}
+                                  placeholder="Material Name"
+                                  className="w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`material-color-${index}`}>Material Color</label>
+                                <input
+                                  id={`material-color-${index}`}
+                                  type="color"
+                                  value={material.color || "#ffffff"}
+                                  onChange={(e) => {
+                                    const newMaterials = [...config.materials];
+                                    newMaterials[index] = { ...material, color: e.target.value };
+                                    setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                  }}
+                                  className="w-10 h-10 rounded border-gray-700 bg-gray-900"
+                                  aria-label="Material Color"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`material-metalness-${index}`}>Material Metalness</label>
+                                <input
+                                  id={`material-metalness-${index}`}
+                                  type="range"
+                                  min="0"
+                                  max="1"
+                                  step="0.1"
+                                  value={material.metalness}
+                                  onChange={(e) => {
+                                    const newMaterials = [...config.materials];
+                                    newMaterials[index] = { ...material, metalness: parseFloat(e.target.value) };
+                                    setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                  }}
+                                  className="w-24"
+                                  aria-label="Material Metalness"
+                                />
+                                <span className="ml-2 text-xs text-gray-300">{material.metalness}</span>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`material-roughness-${index}`}>Material Roughness</label>
+                                <input
+                                  id={`material-roughness-${index}`}
+                                  type="range"
+                                  min="0"
+                                  max="1"
+                                  step="0.1"
+                                  value={material.roughness}
+                                  onChange={(e) => {
+                                    const newMaterials = [...config.materials];
+                                    newMaterials[index] = { ...material, roughness: parseFloat(e.target.value) };
+                                    setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                  }}
+                                  className="w-24"
+                                  aria-label="Material Roughness"
+                                />
+                                <span className="ml-2 text-xs text-gray-300">{material.roughness}</span>
+                              </div>
                               <button
                                 onClick={() => {
                                   const newMaterials = config.materials.filter((_, i) => i !== index);
                                   setConfig(prev => ({ ...prev, materials: newMaterials }));
                                 }}
-                                className="px-2 py-1 text-red-400 hover:text-red-300"
+                                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs border border-red-400 rounded"
                               >
                                 Remove
                               </button>
@@ -674,7 +718,7 @@ export default function Generator() {
                             onClick={() => {
                               setConfig(prev => ({
                                 ...prev,
-                                materials: [...prev.materials, { material_name: '', color: '0x808080', metalness: 0.5, roughness: 0.5 }]
+                                materials: [...prev.materials, { material_name: '', color: '#808080', metalness: 0.5, roughness: 0.5 }]
                               }));
                             }}
                             className="mt-2 text-sm text-purple-400 hover:text-purple-300"
@@ -689,51 +733,70 @@ export default function Generator() {
                             Lights
                           </label>
                           {config.lights.map((light, index) => (
-                            <div key={index} className="flex gap-2 mb-2">
-                              <select
-                                value={light.light_type}
-                                onChange={(e) => {
-                                  const newLights = [...config.lights];
-                                  newLights[index] = { ...light, light_type: e.target.value };
-                                  setConfig(prev => ({ ...prev, lights: newLights }));
-                                }}
-                                className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                              >
-                                <option value="Ambient">Ambient</option>
-                                <option value="Directional">Directional</option>
-                                <option value="Point">Point</option>
-                                <option value="Spot">Spot</option>
-                              </select>
-                              <input
-                                type="text"
-                                value={light.light_color}
-                                onChange={(e) => {
-                                  const newLights = [...config.lights];
-                                  newLights[index] = { ...light, light_color: e.target.value };
-                                  setConfig(prev => ({ ...prev, lights: newLights }));
-                                }}
-                                placeholder="Color (hex)"
-                                className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                              />
-                              <input
-                                type="number"
-                                value={light.intensity}
-                                onChange={(e) => {
-                                  const newLights = [...config.lights];
-                                  newLights[index] = { ...light, intensity: parseFloat(e.target.value) };
-                                  setConfig(prev => ({ ...prev, lights: newLights }));
-                                }}
-                                placeholder="Intensity"
-                                className="w-24 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                                step="0.1"
-                                min="0"
-                              />
+                            <div key={index} className="flex gap-4 mb-4 items-end bg-gray-800 p-3 rounded-lg">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`light-type-${index}`}>Light Type</label>
+                                <select
+                                  id={`light-type-${index}`}
+                                  value={light.light_type}
+                                  onChange={(e) => {
+                                    const newLights = [...config.lights];
+                                    newLights[index] = { 
+                                      ...light, 
+                                      light_type: e.target.value,
+                                      light_class: e.target.value 
+                                    };
+                                    setConfig(prev => ({ ...prev, lights: newLights }));
+                                  }}
+                                  className="w-32 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                >
+                                  <option value="AmbientLight">Ambient</option>
+                                  <option value="DirectionalLight">Directional</option>
+                                  <option value="Point">Point</option>
+                                  <option value="Spot">Spot</option>
+                                  <option value="HemisphereLight">Hemisphere</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`light-color-${index}`}>Light Color</label>
+                                <input
+                                  id={`light-color-${index}`}
+                                  type="color"
+                                  value={light.light_color || "#ffffff"}
+                                  onChange={(e) => {
+                                    const newLights = [...config.lights];
+                                    newLights[index] = { ...light, light_color: e.target.value };
+                                    setConfig(prev => ({ ...prev, lights: newLights }));
+                                  }}
+                                  className="w-10 h-10 rounded border-gray-700 bg-gray-900"
+                                  aria-label="Light Color"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`light-intensity-${index}`}>Light Intensity</label>
+                                <input
+                                  id={`light-intensity-${index}`}
+                                  type="range"
+                                  min="0"
+                                  max="2"
+                                  step="0.1"
+                                  value={light.intensity}
+                                  onChange={(e) => {
+                                    const newLights = [...config.lights];
+                                    newLights[index] = { ...light, intensity: parseFloat(e.target.value) };
+                                    setConfig(prev => ({ ...prev, lights: newLights }));
+                                  }}
+                                  className="w-24"
+                                  aria-label="Light Intensity"
+                                />
+                                <span className="ml-2 text-xs text-gray-300">{light.intensity}</span>
+                              </div>
                               <button
                                 onClick={() => {
                                   const newLights = config.lights.filter((_, i) => i !== index);
                                   setConfig(prev => ({ ...prev, lights: newLights }));
                                 }}
-                                className="px-2 py-1 text-red-400 hover:text-red-300"
+                                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs border border-red-400 rounded"
                               >
                                 Remove
                               </button>
@@ -743,7 +806,12 @@ export default function Generator() {
                             onClick={() => {
                               setConfig(prev => ({
                                 ...prev,
-                                lights: [...prev.lights, { light_type: "Ambient", light_class: "AmbientLight", light_color: "0xffffff", intensity: 0.5 }]
+                                lights: [...prev.lights, { 
+                                  light_type: 'AmbientLight', 
+                                  light_class: 'AmbientLight',
+                                  light_color: '#ffffff', 
+                                  intensity: 1.0 
+                                }]
                               }));
                             }}
                             className="mt-2 text-sm text-purple-400 hover:text-purple-300"

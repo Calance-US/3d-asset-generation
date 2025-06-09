@@ -9,7 +9,7 @@ function App() {
       <div className="min-h-screen bg-gray-900 text-white">
         <Routes>
           <Route path="/" element={<Generator />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/*" element={<Admin />} />
         </Routes>
       </div>
     </Router>
