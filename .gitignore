@@ -81,6 +81,7 @@ dist/
 # Project specific
 backend/app/data/history.json
 *.log
+*.log.*
 .env
 .env.*
 !.env.example

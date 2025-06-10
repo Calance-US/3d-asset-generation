@@ -64,15 +64,18 @@ export default function Generator() {
     }
   };
 
-  async function loadHistory() {
+  const loadHistory = async () => {
     try {
-      const res = await fetch("http://localhost:8000/history");
-      const data = await res.json();
-      setHistory(data.entries);
+      const response = await fetch("http://localhost:8000/history");
+      if (!response.ok) {
+        throw new Error(`Failed to load history: ${response.statusText}`);
+      }
+      const data = await response.json();
+      setHistory(data.entries || []);
     } catch (err) {
-      console.error("Error loading history:", err);
+      setError(`Error loading history: ${err.message}`);
     }
-  }
+  };
 
   async function handleGenerate() {
     if (!prompt) {
@@ -234,35 +237,20 @@ export default function Generator() {
 
   const handleHistorySelect = async (entry) => {
     try {
-      setPrompt(entry.prompt);
-      // Ensure config has all required fields with defaults if missing
-      setConfig({
-        topic_name: entry.config?.topic_name || "",
-        key_concepts: entry.config?.key_concepts || "",
-        education_level: entry.config?.education_level || "High School",
-        learning_objectives: entry.config?.learning_objectives || "",
-        interactive_features: entry.config?.interactive_features || "",
-        components: entry.config?.components || [],
-        materials: entry.config?.materials || [],
-        lights: entry.config?.lights || [],
-        interactive_description: entry.config?.interactive_description || "",
-        animated_elements: entry.config?.animated_elements || "",
-        narration_texts: entry.config?.narration_texts || [],
-        renderer: {
-          antialias: entry.config?.renderer?.antialias ?? true,
-          shadowMapEnabled: entry.config?.renderer?.shadowMapEnabled ?? true,
-          shadowMapType: entry.config?.renderer?.shadowMapType || "PCFSoftShadowMap",
-          outputColorSpace: entry.config?.renderer?.outputColorSpace || "SRGBColorSpace",
-          toneMapping: entry.config?.renderer?.toneMapping || "ACESFilmicToneMapping",
-          toneMappingExposure: entry.config?.renderer?.toneMappingExposure ?? 1.0
-        }
-      });
+      // Set the prompt text
+      setPrompt(entry.user_query || entry.prompt || '');
       
-      // Load the HTML content
-      if (entry.html) {
-        setHtml(entry.html);
-        setLoading(false);
-        setError(null);
+      // Set the provider and subject if available
+      if (entry.provider && entry.provider !== 'Unknown') {
+        setProvider(entry.provider);
+      }
+      if (entry.subject && entry.subject !== 'Unknown') {
+        setSubject(entry.subject);
+      }
+
+      // Set the HTML content
+      if (entry.response || entry.html) {
+        setHtml(entry.response || entry.html);
       } else {
         // If HTML is not in the entry, fetch it from the server
         const response = await fetch(`http://localhost:8000/history/${entry.id}/html`);
@@ -271,11 +259,59 @@ export default function Generator() {
         }
         const data = await response.json();
         setHtml(data.html);
-        setLoading(false);
-        setError(null);
       }
+
+      // Set the config if available
+      if (entry.config) {
+        // Parse JSON strings if they exist
+        const components = entry.config.components || [];
+        const materials = entry.config.materials || [];
+        const lights = entry.config.lights || [];
+        const renderSettings = entry.config.render_settings || {};
+        const narrationTexts = entry.config.narration_texts || [];
+
+        setConfig(prev => ({
+          ...prev,
+          // Basic fields
+          topic_name: entry.config.topic_name || '',
+          key_concepts: entry.config.key_concepts || '',
+          education_level: entry.config.education_level || 'High School',
+          learning_objectives: entry.config.learning_objectives || '',
+          interactive_features: entry.config.interactive_features || '',
+          interactive_description: entry.config.interactive_description || '',
+          animated_elements: entry.config.animated_elements || '',
+          
+          // Complex objects
+          components: components,
+          materials: materials,
+          lights: lights,
+          narration_texts: narrationTexts,
+          
+          // Required fields with defaults
+          three_js_url: entry.config.three_js_url || "https://esm.sh/three@0.155.0",
+          orbit_controls_url: entry.config.orbit_controls_url || "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+          camera_controls: entry.config.camera_controls || "OrbitControls",
+          curve_points: entry.config.curve_points || [{ x: 0, y: 0, z: 0 }],
+          animation_speed: entry.config.animation_speed || 1.0,
+          tts_language: entry.config.tts_language || "en-US",
+          tts_rate: entry.config.tts_rate || 1.0,
+          tts_pitch: entry.config.tts_pitch || 1.0,
+          
+          // Renderer settings
+          renderer: {
+            antialias: renderSettings.antialias ?? true,
+            shadowMapEnabled: renderSettings.shadowMapEnabled ?? true,
+            shadowMapType: renderSettings.shadowMapType || "PCFSoftShadowMap",
+            outputColorSpace: renderSettings.outputColorSpace || "SRGBColorSpace",
+            toneMapping: renderSettings.toneMapping || "ACESFilmicToneMapping",
+            toneMappingExposure: renderSettings.toneMappingExposure ?? 1.0
+          }
+        }));
+      }
+
+      setLoading(false);
+      setError(null);
     } catch (err) {
-      console.error("Error loading history entry:", err);
       setError(`Error loading history entry: ${err.message}`);
       setLoading(false);
     }
@@ -338,12 +374,12 @@ export default function Generator() {
   async function handleDownload(entry, event) {
     event.stopPropagation();
     try {
-      const blob = new Blob([entry.html], { type: 'text/html' });
+      const blob = new Blob([entry.response || entry.html], { type: 'text/html' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const timestamp = new Date(entry.timestamp).toISOString().split('T')[0];
-      const filename = `visualization_${timestamp}_${entry.prompt.slice(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
+      const timestamp = new Date(entry.created_at || entry.timestamp).toISOString().split('T')[0];
+      const filename = `visualization_${timestamp}_${(entry.user_query || entry.prompt).slice(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.html`;
       link.download = filename;
       document.body.appendChild(link);
       link.click();
@@ -394,17 +430,17 @@ export default function Generator() {
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <p className="text-sm text-gray-300">
-                              {entry.prompt.length > 100 
-                                ? `${entry.prompt.substring(0, 97)}...` 
-                                : entry.prompt}
+                              {(entry.user_query || entry.prompt) && (entry.user_query || entry.prompt).length > 100 
+                                ? `${(entry.user_query || entry.prompt).substring(0, 97)}...` 
+                                : entry.user_query || entry.prompt || 'No prompt'}
                             </p>
                             <p className="text-xs text-gray-400 mt-2">
-                              {new Date(entry.timestamp).toLocaleString()}
+                              {new Date(entry.created_at || entry.timestamp).toLocaleString()}
                             </p>
                           </div>
                           <div className="flex items-center space-x-2">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-200">
-                              {entry.provider}
+                              {entry.subject || 'Unknown'}
                             </span>
                             <button
                               onClick={(e) => handleDownload(entry, e)}

@@ -172,7 +172,7 @@ function Admin() {
 
   const truncateContent = (content) => {
     // Remove markdown syntax for preview
-    const plainText = content.replace(/[#*`_~\[\]]/g, '');
+    const plainText = content.replace(/[#*`_~[]]/g, '');
     return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
   };
 
