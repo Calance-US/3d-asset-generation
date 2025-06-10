@@ -1,7 +1,7 @@
 import os
 import re
 import logging
-from typing import Literal, Optional, Dict, Any, List, Union
+from typing import Literal, Optional, Dict, Any, List, Union, Tuple
 import aiohttp
 from openai import AsyncOpenAI
 import requests
@@ -44,6 +44,27 @@ from app.database.database import (
 from app.migrations.add_category_and_tags import run_migration
 from app.services.prompt_generator import PromptGenerator
 from app.config.logging_config import logger
+from app.schemas.schemas import (
+    ComponentConfig,
+    MaterialConfig,
+    LightConfig,
+    RendererConfig,
+    CurvePoint,
+    PromptConfig,
+    GenerateRequest,
+    UpdatePromptRequest,
+    CreatePromptRequest,
+    BatchDeleteRequest,
+    ImportPromptsRequest,
+    HistoryEntryResponse,
+    HistoryResponse,
+    PromptResponse,
+    PromptsResponse,
+    SuccessResponse,
+    HTMLResponse,
+    ModelsResponse,
+    EnhancedPromptResponse
+)
 
 # Load environment variables
 load_dotenv()
@@ -100,143 +121,32 @@ else:
         "action": "init_provider"
     })
 
-# Request schemas
-class ComponentConfig(BaseModel):
-    component_name: str
-    component_description: str
-
-class MaterialConfig(BaseModel):
-    material_name: str
-    color: str
-    metalness: float
-    roughness: float
-    emissive: Optional[str] = None
-    emissiveIntensity: Optional[float] = None
-
-class LightConfig(BaseModel):
-    light_type: str
-    light_class: str
-    light_color: str
-    intensity: float
-    additional_props: Optional[str] = None
-
-class RendererConfig(BaseModel):
-    antialias: bool
-    shadowMapEnabled: bool
-    shadowMapType: str
-    toneMapping: str
-    outputColorSpace: str = "SRGBColorSpace"
-
-class CurvePoint(BaseModel):
-    x: float
-    y: float
-    z: float
-
-class PromptConfig(BaseModel):
-    topic_name: str
-    key_concepts: str
-    three_js_url: str
-    orbit_controls_url: str
-    additional_imports_comment: Optional[str] = None
-    education_level: str
-    learning_objectives: str
-    interactive_features: str
-    components: List[ComponentConfig]
-    materials: List[MaterialConfig]
-    lights: List[LightConfig]
-    renderer: RendererConfig
-    camera_controls: str
-    interactive_description: str
-    animated_elements: str
-    curve_points: List[CurvePoint]
-    animation_speed: float
-    tts_language: str
-    tts_rate: float
-    tts_pitch: float
-    narration_texts: List[str]
-
-class GenerateRequest(BaseModel):
-    topic: str
-    subject: str = "physics"  # Default to physics
-    provider: str = "ollama"  # Default to Ollama
-    modelType: Optional[str] = "generated"
-    selectedModel: Optional[str] = None
-    config: Optional[PromptConfig] = None  # Optional custom configuration
-
-class UpdatePromptRequest(BaseModel):
-    subject: Optional[str] = None
-    topic: Optional[str] = None
-    content: Optional[str] = None
-    category: Optional[str] = None
-    tags: Optional[List[str]] = None  # Always handle as a list
-
-    def dict(self, *args, **kwargs):
-        data = super().dict(*args, **kwargs)
-        # Convert tags to comma-separated string for database
-        if isinstance(data.get('tags'), list):
-            data['tags'] = ', '.join(data['tags'])
-        return data
-
-class CreatePromptRequest(BaseModel):
-    subject: str
-    topic: str
-    content: str
-    category: Optional[str] = None
-    tags: Optional[List[str]] = None  # Always handle as a list
-
-    def dict(self, *args, **kwargs):
-        data = super().dict(*args, **kwargs)
-        # Convert tags to comma-separated string for database
-        if isinstance(data.get('tags'), list):
-            data['tags'] = ', '.join(data['tags'])
-        return data
-
-class BatchDeleteRequest(BaseModel):
-    prompt_ids: List[int]
-
-class ImportPromptsRequest(BaseModel):
-    prompts: List[Dict]
-
-class EnhancedPromptResponse(BaseModel):
-    topic_name: str
-    key_concepts: str
-    education_level: str
-    learning_objectives: str
-    interactive_features: str
-    components: List[ComponentConfig]
-    materials: List[MaterialConfig]
-    lights: List[LightConfig]
-    interactive_description: str
-    animated_elements: str
-    narration_texts: List[str]
-
-
 def parse_html_content(text: str) -> str:
     """
     Parse and extract HTML content from the generated text.
-    
+
     Args:
         text: The generated text that may contain HTML
-        
+
     Returns:
         str: The extracted HTML content or empty string if not found
     """
     try:
         # Remove any markdown code block markers
         text = text.replace("```html", "").replace("```", "")
-        
+
         # Find the first <!DOCTYPE html> or <html> tag
         html_start = text.find("<!DOCTYPE html>")
         if html_start == -1:
             html_start = text.find("<html>")
-        
+
         if html_start == -1:
             logger.error("No HTML content found in the response", extra={
                 "action": "validate_html",
                 "response_length": len(text)
             })
             return ""
-        
+
         # Find the last </html> tag
         html_end = text.rfind("</html>")
         if html_end == -1:
@@ -245,10 +155,10 @@ def parse_html_content(text: str) -> str:
                 "content_length": len(text)
             })
             return ""
-        
+
         # Extract the HTML content
         html_content = text[html_start:html_end + 7]  # +7 for </html>
-        
+
         # Validate that it's proper HTML
         if not html_content.strip().startswith(("<!DOCTYPE html>", "<html")):
             logger.error("Invalid HTML content in the response", extra={
@@ -256,7 +166,7 @@ def parse_html_content(text: str) -> str:
                 "error": "No valid HTML tag found"
             })
             return ""
-        
+
         try:
             BeautifulSoup(html_content, "html.parser")
         except Exception as e:
@@ -265,15 +175,15 @@ def parse_html_content(text: str) -> str:
                 "error": str(e)
             })
             return ""
-        
+
         return html_content
-        
+
     except Exception as e:
         logger.error(f"Error parsing HTML content: {str(e)}")
         return ""
 
-@app.post("/generate")
-async def generate_visualization(request: GenerateRequest, db: Session = Depends(get_db)):
+@app.post("/generate", response_model=HTMLResponse)
+async def generate_visualization(request: GenerateRequest, db: Session = Depends(get_db)) -> HTMLResponse:
     """Generate a 3D visualization based on the topic."""
     try:
         logger.info("Starting visualization generation", extra={
@@ -320,6 +230,8 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
         logger.info("\nGenerated Prompt Content:")
         logger.info(prompt_content)
 
+        generated_text: Optional[str] = None
+
         if request.provider == "openai":
             if not client:
                 logger.error("OpenAI API key not configured", extra={
@@ -327,7 +239,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                     "provider": "openai"
                 })
                 raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-            
+
             # Generate with OpenAI
             response = await client.chat.completions.create(
                 model=settings.OPENAI_MODEL,
@@ -336,9 +248,9 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                 ],
                 temperature=0.7
             )
-            
+
             generated_text = response.choices[0].message.content
-            
+
         elif request.provider == "ollama":
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -355,10 +267,10 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                             "provider": "ollama"
                         })
                         raise HTTPException(status_code=500, detail="Failed to generate with Ollama")
-                    
+
                     result = await response.json()
-                    generated_text = result.get("response", "")
-            
+                    generated_text = str(result.get("response", ""))
+
         elif request.provider == "gemini":
             if not gemini_model:
                 logger.error("Google API key not configured", extra={
@@ -366,8 +278,8 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                     "provider": "gemini"
                 })
                 raise HTTPException(status_code=400, detail="Google API key not configured")
-            
-            response = await gemini_model.generate_content(
+
+            response = gemini_model.generate_content(
                 f"{prompt_content}",
                 safety_settings={
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
@@ -376,25 +288,28 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
             )
-            
+
             generated_text = response.text
-            
+
         else:
             logger.error(f"Invalid provider specified: {request.provider}", extra={
                 "action": "generate_visualization",
                 "provider": request.provider
             })
             raise HTTPException(status_code=400, detail="Invalid provider specified")
-        
+
         # Parse the HTML content
+        if generated_text is None:
+            raise HTTPException(status_code=400, detail="No HTML content found in the response")
+
         html_content = parse_html_content(generated_text)
         if not html_content:
             logger.error("No HTML content found", extra={
                 "action": "validate_html",
-                "response_length": len(response)
+                "response_length": len(generated_text) if generated_text else 0
             })
             raise HTTPException(status_code=400, detail="No HTML content found in the response")
-        
+
         if not html_content.endswith("</html>"):
             logger.error("No closing HTML tag found", extra={
                 "action": "validate_html",
@@ -410,20 +325,70 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                 "error": str(e)
             })
             raise HTTPException(status_code=400, detail="Invalid HTML content in the response")
-        
+
         # Save to history
+        # First create a prompt entry with all educational content
+        prompt_entry = {
+            "topic": request.topic,
+            "subject": request.subject,
+            "content": prompt_content,  # Save the actual generated prompt content
+            "category": None,  # Optional field
+            "key_concepts": request.config.key_concepts if request.config else None,
+            "education_level": request.config.education_level if request.config else "High School",
+            "learning_objectives": request.config.learning_objectives if request.config else None,
+            "interactive_features": request.config.interactive_features if request.config else None,
+            "embedding": None,  # Will be populated later if needed
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
+        }
+        
+        # Log the values being passed to create_prompt
+        logger.info("Creating prompt with values:", extra={
+            "action": "create_prompt",
+            "values": {
+                "subject": prompt_entry["subject"],
+                "topic": prompt_entry["topic"],
+                "content": prompt_entry["content"],
+                "category": prompt_entry["category"],
+                "key_concepts": prompt_entry["key_concepts"],
+                "education_level": prompt_entry["education_level"],
+                "learning_objectives": prompt_entry["learning_objectives"],
+                "interactive_features": prompt_entry["interactive_features"]
+            }
+        })
+        
+        # Create prompt with all fields
+        prompt = create_prompt(
+            db,
+            subject=prompt_entry["subject"],
+            topic=prompt_entry["topic"],
+            content=prompt_entry["content"],
+            category=prompt_entry["category"],
+            key_concepts=prompt_entry["key_concepts"],
+            education_level=prompt_entry["education_level"],
+            learning_objectives=prompt_entry["learning_objectives"],
+            interactive_features=prompt_entry["interactive_features"]
+        )
+
+        # Then create the history entry with the prompt_id and visualization details
         history_entry = {
             "id": str(datetime.now().timestamp()),
-            "prompt": request.topic,
+            "prompt_id": prompt.id,
+            "user_query": request.topic,
+            "response": html_content,
             "provider": request.provider,
-            "subject": request.subject,
-            "html": html_content,
-            "timestamp": datetime.now()
+            "components": json.dumps([comp.model_dump() for comp in request.config.components]) if request.config else None,
+            "materials": json.dumps([mat.model_dump() for mat in request.config.materials]) if request.config else None,
+            "lights": json.dumps([light.model_dump() for light in request.config.lights]) if request.config else None,
+            "render_settings": json.dumps(request.config.renderer.model_dump()) if request.config else None,
+            "animation_speed": request.config.animation_speed if request.config else 1.0,
+            "narration_texts": json.dumps(request.config.narration_texts) if request.config else None,
+            "created_at": datetime.now()
         }
         create_history_entry(db, history_entry)
-        
-        return {"html": html_content}
-        
+
+        return HTMLResponse(html=html_content)
+
     except Exception as e:
         logger.error("Error generating visualization", extra={
             "action": "generate_visualization",
@@ -432,12 +397,12 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/models/{subject}")
-async def get_available_models(subject: str):
+@app.get("/models/{subject}", response_model=ModelsResponse)
+async def get_available_models(subject: str) -> ModelsResponse:
     """Get available models for a subject."""
     try:
         models = model_repository.get_models(subject)
-        return {"models": models}
+        return ModelsResponse(models=models)
     except Exception as e:
         logger.error("Error getting models", extra={
             "action": "get_models",
@@ -447,22 +412,45 @@ async def get_available_models(subject: str):
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/history")
-async def get_history(db: Session = Depends(get_db)):
+@app.get("/history", response_model=HistoryResponse)
+async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
     """Get the history of generated visualizations."""
     try:
         history = get_all_history(db)
-        return {"entries": [
-            {
-                "id": entry.id,
-                "prompt": entry.prompt,
-                "provider": entry.provider,
-                "subject": entry.subject,
-                "html": entry.html,
-                "timestamp": entry.timestamp.isoformat()
-            }
+        return HistoryResponse(entries=[
+            HistoryEntryResponse(
+                id=entry.id,
+                prompt=entry.user_query or "",
+                provider=entry.provider or "Unknown",
+                subject=entry.prompt.subject if entry.prompt else "Unknown",
+                html=entry.response or "",
+                timestamp=entry.created_at.isoformat() if entry.created_at else datetime.now().isoformat(),
+                # Add configuration fields
+                config={
+                    "topic_name": entry.prompt.topic if entry.prompt else "",
+                    "key_concepts": entry.prompt.key_concepts if entry.prompt else "",
+                    "education_level": entry.prompt.education_level if entry.prompt else "High School",
+                    "learning_objectives": entry.prompt.learning_objectives if entry.prompt else "",
+                    "interactive_features": entry.prompt.interactive_features if entry.prompt else "",
+                    "components": json.loads(entry.components) if entry.components and entry.components.strip() else [],
+                    "materials": json.loads(entry.materials) if entry.materials and entry.materials.strip() else [],
+                    "lights": json.loads(entry.lights) if entry.lights and entry.lights.strip() else [],
+                    "render_settings": json.loads(entry.render_settings) if entry.render_settings and entry.render_settings.strip() else {},
+                    "animation_speed": entry.animation_speed or 1.0,
+                    "narration_texts": json.loads(entry.narration_texts) if entry.narration_texts and entry.narration_texts.strip() else [],
+                    "interactive_description": entry.prompt.interactive_features if entry.prompt else "",
+                    "animated_elements": entry.prompt.interactive_features if entry.prompt else "",
+                    "three_js_url": "https://esm.sh/three@0.155.0",
+                    "orbit_controls_url": "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+                    "camera_controls": "OrbitControls",
+                    "curve_points": [{"x": 0, "y": 0, "z": 0}],
+                    "tts_language": "en-US",
+                    "tts_rate": 1.0,
+                    "tts_pitch": 1.0
+                }
+            )
             for entry in history
-        ]}
+        ])
     except Exception as e:
         logger.error("Error getting history", extra={
             "action": "get_history",
@@ -471,21 +459,44 @@ async def get_history(db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/history/{entry_id}")
-async def get_history_entry(entry_id: str, db: Session = Depends(get_db)):
+@app.get("/history/{entry_id}", response_model=HistoryEntryResponse)
+async def get_history_entry(entry_id: str, db: Session = Depends(get_db)) -> HistoryEntryResponse:
     """Get a specific history entry by ID."""
     try:
         entry = get_history_entry_by_id(db, entry_id)
         if not entry:
             raise HTTPException(status_code=404, detail="History entry not found")
-        return {
-            "id": entry.id,
-            "prompt": entry.prompt,
-            "provider": entry.provider,
-            "subject": entry.subject,
-            "html": entry.html,
-            "timestamp": entry.timestamp.isoformat()
-        }
+        return HistoryEntryResponse(
+            id=entry.id,
+            prompt=entry.user_query or "",
+            provider=entry.provider or "Unknown",
+            subject=entry.prompt.subject if entry.prompt else "Unknown",
+            html=entry.response or "",
+            timestamp=entry.created_at.isoformat() if entry.created_at else datetime.now().isoformat(),
+            # Add configuration fields
+            config={
+                "topic_name": entry.prompt.topic if entry.prompt else "",
+                "key_concepts": entry.prompt.key_concepts if entry.prompt else "",
+                "education_level": entry.prompt.education_level if entry.prompt else "High School",
+                "learning_objectives": entry.prompt.learning_objectives if entry.prompt else "",
+                "interactive_features": entry.prompt.interactive_features if entry.prompt else "",
+                "components": json.loads(entry.components) if entry.components else [],
+                "materials": json.loads(entry.materials) if entry.materials else [],
+                "lights": json.loads(entry.lights) if entry.lights else [],
+                "render_settings": json.loads(entry.render_settings) if entry.render_settings else {},
+                "animation_speed": entry.animation_speed or 1.0,
+                "narration_texts": json.loads(entry.narration_texts) if entry.narration_texts else [],
+                "interactive_description": entry.prompt.interactive_features if entry.prompt else "",
+                "animated_elements": entry.prompt.interactive_features if entry.prompt else "",
+                "three_js_url": "https://esm.sh/three@0.155.0",
+                "orbit_controls_url": "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+                "camera_controls": "OrbitControls",
+                "curve_points": [{"x": 0, "y": 0, "z": 0}],
+                "tts_language": "en-US",
+                "tts_rate": 1.0,
+                "tts_pitch": 1.0
+            }
+        )
     except Exception as e:
         logger.error("Error getting history entry", extra={
             "action": "get_history_entry",
@@ -495,12 +506,12 @@ async def get_history_entry(entry_id: str, db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/history/{entry_id}")
-async def delete_history_entry(entry_id: str, db: Session = Depends(get_db)):
+@app.delete("/history/{entry_id}", response_model=SuccessResponse)
+async def delete_history_entry(entry_id: str, db: Session = Depends(get_db)) -> SuccessResponse:
     """Delete a history entry."""
     try:
         remove_history_entry(db, entry_id)
-        return {"status": "success"}
+        return SuccessResponse(status="success")
     except Exception as e:
         logger.error("Error deleting history entry", extra={
             "action": "delete_history_entry",
@@ -510,55 +521,33 @@ async def delete_history_entry(entry_id: str, db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.put("/admin/prompts/{prompt_id}")
+@app.put("/admin/prompts/{prompt_id}", response_model=PromptResponse)
 async def update_prompt_endpoint(
     prompt_id: int,
     prompt_data: UpdatePromptRequest,
     db: Session = Depends(get_db)
-):
-    """
-    Update a prompt in the database.
-    
-    Args:
-        prompt_id: ID of the prompt to update
-        prompt_data: Updated prompt data
-        db: Database session
-        
-    Returns:
-        Updated prompt data
-    """
+) -> PromptResponse:
+    """Update a prompt in the database."""
     try:
-        # Convert Pydantic model to dict, excluding None values
         update_data = {k: v for k, v in prompt_data.dict().items() if v is not None}
-        
         if not update_data:
-            raise HTTPException(
-                status_code=400,
-                detail="No valid fields provided for update"
-            )
-        
-        # Update the prompt
+            raise HTTPException(status_code=400, detail="No valid fields provided for update")
+
         updated_prompt = update_prompt(db, prompt_id, update_data)
-        
         if not updated_prompt:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Prompt with ID {prompt_id} not found"
-            )
-        
-        # Reinitialize FAISS index with updated prompts
+            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
+
         prompt_selector.initialize_index()
-        
-        # Return the updated prompt
-        return {
-            "id": updated_prompt.id,
-            "subject": updated_prompt.subject,
-            "topic": updated_prompt.topic,
-            "content": updated_prompt.content,
-            "category": updated_prompt.category,
-            "tags": [tag.name for tag in updated_prompt.tags]
-        }
-        
+
+        return PromptResponse(
+            id=updated_prompt.id,
+            subject=updated_prompt.subject,
+            topic=updated_prompt.topic,
+            content=updated_prompt.content,
+            category=updated_prompt.category,
+            tags=[tag.name for tag in updated_prompt.tags]
+        )
+
     except Exception as e:
         logger.error("Error updating prompt", extra={
             "action": "update_prompt",
@@ -567,30 +556,28 @@ async def update_prompt_endpoint(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/prompts")
+@app.get("/admin/prompts", response_model=PromptsResponse)
 async def get_all_prompts(
     subject: Optional[str] = None,
     category: Optional[str] = None,
     tag: Optional[str] = None,
     search: Optional[str] = None,
     db: Session = Depends(get_db)
-):
+) -> PromptsResponse:
     """Get all prompts from the database with optional filtering."""
     try:
         prompts = get_prompts(db, subject, category, tag, search)
-        return {
-            "prompts": [
-                {
-                    "id": prompt.id,
-                    "subject": prompt.subject,
-                    "topic": prompt.topic,
-                    "content": prompt.content,
-                    "category": prompt.category,
-                    "tags": [tag.name for tag in prompt.tags]
-                }
-                for prompt in prompts
-            ]
-        }
+        return PromptsResponse(prompts=[
+            PromptResponse(
+                id=prompt.id,
+                subject=prompt.subject,
+                topic=prompt.topic,
+                content=prompt.content,
+                category=prompt.category,
+                tags=[tag.name for tag in prompt.tags]
+            )
+            for prompt in prompts
+        ])
     except Exception as e:
         logger.error("Error getting prompts", extra={
             "action": "get_all_prompts",
@@ -599,45 +586,33 @@ async def get_all_prompts(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/admin/prompts")
+@app.post("/admin/prompts", response_model=PromptResponse)
 async def create_prompt_endpoint(
     prompt_data: CreatePromptRequest,
     db: Session = Depends(get_db)
-):
-    """
-    Create a new prompt in the database.
-    
-    Args:
-        prompt_data: New prompt data
-        db: Database session
-        
-    Returns:
-        Created prompt data
-    """
+) -> PromptResponse:
+    """Create a new prompt in the database."""
     try:
-        # Create the prompt
         new_prompt = create_prompt(
             db,
             subject=prompt_data.subject,
             topic=prompt_data.topic,
             content=prompt_data.content,
             category=prompt_data.category,
-            tags=prompt_data.tags
+            tags=",".join(prompt_data.tags) if prompt_data.tags else ""
         )
-        
-        # Reinitialize FAISS index with updated prompts
+
         prompt_selector.initialize_index()
-        
-        # Return the created prompt
-        return {
-            "id": new_prompt.id,
-            "subject": new_prompt.subject,
-            "topic": new_prompt.topic,
-            "content": new_prompt.content,
-            "category": new_prompt.category,
-            "tags": [tag.name for tag in new_prompt.tags]
-        }
-        
+
+        return PromptResponse(
+            id=new_prompt.id,
+            subject=new_prompt.subject,
+            topic=new_prompt.topic,
+            content=new_prompt.content,
+            category=new_prompt.category,
+            tags=[tag.name for tag in new_prompt.tags]
+        )
+
     except Exception as e:
         logger.error("Error creating prompt", extra={
             "action": "create_prompt",
@@ -646,34 +621,20 @@ async def create_prompt_endpoint(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/admin/prompts/{prompt_id}")
+@app.delete("/admin/prompts/{prompt_id}", response_model=SuccessResponse)
 async def delete_prompt_endpoint(
     prompt_id: int,
     db: Session = Depends(get_db)
-):
-    """
-    Delete a prompt from the database.
-    
-    Args:
-        prompt_id: ID of the prompt to delete
-        db: Database session
-        
-    Returns:
-        Success status
-    """
+) -> SuccessResponse:
+    """Delete a prompt from the database."""
     try:
         success = delete_prompt(db, prompt_id)
         if not success:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Prompt with ID {prompt_id} not found"
-            )
-        
-        # Reinitialize FAISS index with updated prompts
+            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
+
         prompt_selector.initialize_index()
-        
-        return {"status": "success"}
-        
+        return SuccessResponse(status="success")
+
     except Exception as e:
         logger.error("Error deleting prompt", extra={
             "action": "delete_prompt",
@@ -683,28 +644,25 @@ async def delete_prompt_endpoint(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/admin/prompts/{prompt_id}/duplicate")
+@app.post("/admin/prompts/{prompt_id}/duplicate", response_model=PromptResponse)
 async def duplicate_prompt_endpoint(
     prompt_id: int,
     db: Session = Depends(get_db)
-):
+) -> PromptResponse:
     """Duplicate a prompt."""
     try:
         duplicated = duplicate_prompt(db, prompt_id)
         if not duplicated:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Prompt with ID {prompt_id} not found"
-            )
-        
-        return {
-            "id": duplicated.id,
-            "subject": duplicated.subject,
-            "topic": duplicated.topic,
-            "content": duplicated.content,
-            "category": duplicated.category,
-            "tags": [tag.name for tag in duplicated.tags]
-        }
+            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
+
+        return PromptResponse(
+            id=duplicated.id,
+            subject=duplicated.subject,
+            topic=duplicated.topic,
+            content=duplicated.content,
+            category=duplicated.category,
+            tags=[tag.name for tag in duplicated.tags]
+        )
     except Exception as e:
         logger.error("Error duplicating prompt", extra={
             "action": "duplicate_prompt",
@@ -713,24 +671,19 @@ async def duplicate_prompt_endpoint(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/admin/prompts/batch-delete")
+@app.post("/admin/prompts/batch-delete", response_model=SuccessResponse)
 async def batch_delete_prompts_endpoint(
     request: BatchDeleteRequest,
     db: Session = Depends(get_db)
-):
+) -> SuccessResponse:
     """Delete multiple prompts."""
     try:
         success = batch_delete_prompts(db, request.prompt_ids)
         if not success:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to delete prompts"
-            )
-        
-        # Reinitialize FAISS index with updated prompts
+            raise HTTPException(status_code=500, detail="Failed to delete prompts")
+
         prompt_selector.initialize_index()
-        
-        return {"status": "success"}
+        return SuccessResponse(status="success")
     except Exception as e:
         logger.error("Error deleting prompts", extra={
             "action": "batch_delete_prompts",
@@ -739,12 +692,22 @@ async def batch_delete_prompts_endpoint(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/admin/prompts/export")
-async def export_prompts_endpoint(db: Session = Depends(get_db)):
+@app.get("/admin/prompts/export", response_model=PromptsResponse)
+async def export_prompts_endpoint(db: Session = Depends(get_db)) -> PromptsResponse:
     """Export all prompts."""
     try:
         prompts_data = export_prompts(db)
-        return {"prompts": prompts_data}
+        return PromptsResponse(prompts=[
+            PromptResponse(
+                id=prompt["id"],
+                subject=prompt["subject"],
+                topic=prompt["topic"],
+                content=prompt["content"],
+                category=prompt["category"],
+                tags=prompt["tags"]
+            )
+            for prompt in prompts_data
+        ])
     except Exception as e:
         logger.error("Error exporting prompts", extra={
             "action": "export_prompts",
@@ -753,20 +716,17 @@ async def export_prompts_endpoint(db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/admin/prompts/import")
+@app.post("/admin/prompts/import", response_model=SuccessResponse)
 async def import_prompts_endpoint(
     request: ImportPromptsRequest,
     db: Session = Depends(get_db)
-):
+) -> SuccessResponse:
     """Import prompts."""
     try:
         success = import_prompts(db, request.prompts)
         if not success:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to import prompts"
-            )
-        return {"status": "success"}
+            raise HTTPException(status_code=500, detail="Failed to import prompts")
+        return SuccessResponse(status="success")
     except Exception as e:
         logger.error("Error importing prompts", extra={
             "action": "import_prompts",
@@ -775,8 +735,8 @@ async def import_prompts_endpoint(
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/enhance-prompt")
-async def enhance_prompt(request: GenerateRequest):
+@app.post("/enhance-prompt", response_model=EnhancedPromptResponse)
+async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)) -> EnhancedPromptResponse:
     """Enhance a basic prompt into a detailed configuration using LLM."""
     try:
         logger.info("Enhancing prompt", extra={
@@ -785,7 +745,7 @@ async def enhance_prompt(request: GenerateRequest):
             "subject": request.subject,
             "provider": request.provider
         })
-        
+
         # Create a prompt for the LLM to enhance the concept
         enhancement_prompt = f"""Given the following concept prompt: "{request.topic}" in the subject of {request.subject},
         generate a detailed configuration for a 3D visualization. Return the response as a JSON object with the following structure.
@@ -804,7 +764,7 @@ async def enhance_prompt(request: GenerateRequest):
             ],
             "materials": [
                 {{
-                    "material_name": "Name of the material [threejs material class - chose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial]",
+                    "material_name": "Name of the material (based on the components) and the threejs material class [threejs material class - chose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial]",
                     "color": "0xRRGGBB",
                     "metalness": 0.5,
                     "roughness": 0.5
@@ -828,13 +788,13 @@ async def enhance_prompt(request: GenerateRequest):
 
         Make the response educational, scientifically accurate, and suitable for {request.subject} education.
         Focus on making the visualization clear and intuitive.
-        IMPORTANT: 
+        IMPORTANT:
         1. Return ONLY the JSON object, no other text or explanation.
         2. Keep all text fields concise to avoid truncation.
         3. Ensure all JSON fields are properly closed.
         4. Do not include any markdown formatting.
         """
-        
+
         logger.debug(f"Enhancement prompt created: {enhancement_prompt}")
 
         if request.provider == "openai":
@@ -844,7 +804,7 @@ async def enhance_prompt(request: GenerateRequest):
                     "provider": "openai"
                 })
                 raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-            
+
             logger.info("Using OpenAI for prompt enhancement", extra={
                 "action": "enhance_prompt",
                 "provider": "openai"
@@ -856,14 +816,21 @@ async def enhance_prompt(request: GenerateRequest):
                 ],
                 temperature=0.7
             )
-            
+
             generated_text = response.choices[0].message.content
             logger.debug("OpenAI response received", extra={
                 "action": "enhance_prompt",
                 "provider": "openai",
-                "response_length": len(generated_text)
+                "response_length": len(generated_text) if generated_text else 0
             })
-            
+
+            if not generated_text:
+                logger.error("No response from OpenAI", extra={
+                    "action": "enhance_prompt",
+                    "provider": "openai"
+                })
+                raise HTTPException(status_code=500, detail="No response from OpenAI")
+
             # Clean the response to ensure it's valid JSON
             try:
                 # Remove any markdown code block markers
@@ -873,7 +840,7 @@ async def enhance_prompt(request: GenerateRequest):
                 end_idx = cleaned_text.rfind("}") + 1
                 if start_idx >= 0 and end_idx > start_idx:
                     cleaned_text = cleaned_text[start_idx:end_idx]
-                
+
                 # Validate JSON structure
                 try:
                     enhanced_config = json.loads(cleaned_text)
@@ -886,34 +853,34 @@ async def enhance_prompt(request: GenerateRequest):
                     missing_fields = [field for field in required_fields if field not in enhanced_config]
                     if missing_fields:
                         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-                    
+
                     # Truncate long text fields
-                    for field in ["topic_name", "key_concepts", "learning_objectives", "interactive_features", 
+                    for field in ["topic_name", "key_concepts", "learning_objectives", "interactive_features",
                                 "interactive_description", "animated_elements"]:
                         if field in enhanced_config:
                             enhanced_config[field] = enhanced_config[field]
-                    
+
                     # Truncate component descriptions
                     for component in enhanced_config.get("components", []):
                         if "component_description" in component:
                             # Removed truncation logic
                             pass
-                    
+
                     # Truncate narration texts
                     enhanced_config["narration_texts"] = [text for text in enhanced_config.get("narration_texts", [])]
-                    
+
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON structure: {str(e)}")
                     logger.error(f"Cleaned text: {cleaned_text}")
                     raise
-                
+
                 logger.debug(f"Cleaned and validated response: {json.dumps(enhanced_config, indent=2)}")
-                
+
             except Exception as e:
                 logger.error(f"Failed to parse LLM response as JSON: {str(e)}")
                 logger.error(f"Raw response: {generated_text}")
                 raise HTTPException(status_code=500, detail=f"Failed to parse LLM response as JSON: {str(e)}")
-            
+
         elif request.provider == "ollama":
             logger.info("Using Ollama for prompt enhancement", extra={
                 "action": "enhance_prompt",
@@ -934,7 +901,7 @@ async def enhance_prompt(request: GenerateRequest):
                             "provider": "ollama"
                         })
                         raise HTTPException(status_code=500, detail="Failed to generate with Ollama")
-                    
+
                     result = await response.json()
                     generated_text = result.get("response", "")
                     logger.debug("Ollama response received", extra={
@@ -942,7 +909,7 @@ async def enhance_prompt(request: GenerateRequest):
                         "provider": "ollama",
                         "response_length": len(generated_text)
                     })
-                    
+
                     try:
                         # Clean the response to ensure it's valid JSON
                         cleaned_text = generated_text.replace("```json", "").replace("```", "").strip()
@@ -950,14 +917,14 @@ async def enhance_prompt(request: GenerateRequest):
                         end_idx = cleaned_text.rfind("}") + 1
                         if start_idx >= 0 and end_idx > start_idx:
                             cleaned_text = cleaned_text[start_idx:end_idx]
-                        
+
                         logger.debug(f"Cleaned response: {cleaned_text[:200]}...")
                         enhanced_config = json.loads(cleaned_text)
                     except json.JSONDecodeError as e:
                         logger.error(f"Failed to parse Ollama response as JSON: {str(e)}")
                         logger.error(f"Raw response: {generated_text}")
                         raise HTTPException(status_code=500, detail=f"Failed to parse Ollama response as JSON: {str(e)}")
-            
+
         elif request.provider == "gemini":
             if not gemini_model:
                 logger.error("Google API key not configured", extra={
@@ -965,12 +932,12 @@ async def enhance_prompt(request: GenerateRequest):
                     "provider": "gemini"
                 })
                 raise HTTPException(status_code=400, detail="Google API key not configured")
-            
+
             logger.info("Using Gemini for prompt enhancement", extra={
                 "action": "enhance_prompt",
                 "provider": "gemini"
             })
-            response = await gemini_model.generate_content(
+            response = gemini_model.generate_content(
                 enhancement_prompt,
                 safety_settings={
                     HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
@@ -979,14 +946,14 @@ async def enhance_prompt(request: GenerateRequest):
                     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
                 }
             )
-            
+
             generated_text = response.text
             logger.debug("Gemini response received", extra={
                 "action": "enhance_prompt",
                 "provider": "gemini",
                 "response_length": len(generated_text)
             })
-            
+
             try:
                 # Clean the response to ensure it's valid JSON
                 cleaned_text = generated_text.replace("```json", "").replace("```", "").strip()
@@ -994,14 +961,14 @@ async def enhance_prompt(request: GenerateRequest):
                 end_idx = cleaned_text.rfind("}") + 1
                 if start_idx >= 0 and end_idx > start_idx:
                     cleaned_text = cleaned_text[start_idx:end_idx]
-                
+
                 logger.debug(f"Cleaned response: {cleaned_text[:200]}...")
                 enhanced_config = json.loads(cleaned_text)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse Gemini response as JSON: {str(e)}")
                 logger.error(f"Raw response: {generated_text}")
                 raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response as JSON: {str(e)}")
-            
+
         else:
             logger.error(f"Invalid provider specified: {request.provider}", extra={
                 "action": "enhance_prompt",
@@ -1018,7 +985,7 @@ async def enhance_prompt(request: GenerateRequest):
 
         # Validate and return the enhanced configuration
         return EnhancedPromptResponse(**enhanced_config)
-        
+
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse LLM response as JSON: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to parse LLM response as JSON")
@@ -1049,7 +1016,7 @@ async def startup_event():
                 "subject": prompt.subject,
                 "topic": prompt.topic
             })
-        
+
         if settings.RUN_MIGRATIONS:
             logger.info("Running database migrations...", extra={
                 "action": "run_migrations"
@@ -1060,14 +1027,14 @@ async def startup_event():
             logger.info("Skipping database migrations. Set RUN_MIGRATIONS=1 to run migrations.", extra={
                 "action": "skip_migrations"
             })
-            
+
         # Initialize prompt selector
         global prompt_selector
         prompt_selector = PromptSelector()
         logger.info("Prompt selector initialized", extra={
             "action": "init_prompt_selector"
         })
-        
+
     except Exception as e:
         logger.error("Error during startup", extra={
             "action": "startup",

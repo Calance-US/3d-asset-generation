@@ -1,7 +1,7 @@
 """add category and tags
 
 Revision ID: bb57dd13ac87
-Revises: 
+Revises:
 Create Date: 2023-10-01 12:00:00.000000
 
 """
@@ -21,18 +21,21 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema."""
     # Create a new table with the updated schema
-    op.create_table(
-        'prompts_new',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('topic', sa.String(), nullable=True),
-        sa.Column('subject', sa.String(), nullable=True),
-        sa.Column('content', sa.String(), nullable=True),
-        sa.Column('category', sa.String(), nullable=True),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_prompts_new_category'), 'prompts_new', ['category'], unique=False)
-    op.create_index(op.f('ix_prompts_new_subject'), 'prompts_new', ['subject'], unique=False)
-    op.create_index(op.f('ix_prompts_new_topic'), 'prompts_new', ['topic'], unique=False)
+    conn = op.get_bind()
+    tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tags';").fetchall()
+    if not tables:
+        op.create_table(
+            'prompts_new',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('topic', sa.String(), nullable=True),
+            sa.Column('subject', sa.String(), nullable=True),
+            sa.Column('content', sa.String(), nullable=True),
+            sa.Column('category', sa.String(), nullable=True),
+            sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index(op.f('ix_prompts_new_category'), 'prompts_new', ['category'], unique=False)
+        op.create_index(op.f('ix_prompts_new_subject'), 'prompts_new', ['subject'], unique=False)
+        op.create_index(op.f('ix_prompts_new_topic'), 'prompts_new', ['topic'], unique=False)
 
     # Copy data from the old table to the new table
     op.execute('INSERT INTO prompts_new (id, topic, subject, content) SELECT id, topic, subject, content FROM prompts')

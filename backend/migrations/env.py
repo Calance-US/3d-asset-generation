@@ -5,7 +5,7 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from app.database import Base
+from app.database.database import Base
 from app.models import Prompt, Tag  # Import all models here
 
 # this is the Alembic Config object, which provides

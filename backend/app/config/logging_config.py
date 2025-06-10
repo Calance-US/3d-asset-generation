@@ -2,29 +2,20 @@ import logging.config
 from pathlib import Path
 from pythonjsonlogger import jsonlogger
 
-# Get the project root directory (backend folder)
+# Define project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# Custom JSON formatter
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
-    def add_fields(self, log_record, record, message_dict):
-        super(CustomJsonFormatter, self).add_fields(log_record, record, message_dict)
-        log_record['timestamp'] = self.formatTime(record)
-        log_record['level'] = record.levelname
-        log_record['module'] = record.module
-        log_record['function'] = record.funcName
-        log_record['line'] = record.lineno
-        if hasattr(record, 'extra'):
-            log_record.update(record.extra)
-
-# Log configuration
+# Configure logging
 log_config = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
-            "()": CustomJsonFormatter,
-            "format": "%(timestamp)s %(level)s %(module)s %(function)s %(line)s %(message)s"
+            "()": jsonlogger.JsonFormatter,
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "json_default": str,
+            "json_ensure_ascii": False
         }
     },
     "handlers": {
@@ -37,9 +28,8 @@ log_config = {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "json",
             "filename": str(PROJECT_ROOT / "app.log"),
-            "maxBytes": 1048576,  # 1MB
-            "backupCount": 5,
-            "encoding": "utf-8"
+            "maxBytes": 1024 * 1024,  # 1MB
+            "backupCount": 5
         }
     },
     "root": {
@@ -48,10 +38,10 @@ log_config = {
     }
 }
 
-# Configure logging
+# Apply logging configuration
 logging.config.dictConfig(log_config)
 
-# Define logger
+# Create logger
 logger = logging.getLogger(__name__)
 
 # Example of how to use structured logging:

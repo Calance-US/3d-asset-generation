@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Table, Float, DateTime, Text, JSON
 from sqlalchemy.orm import relationship
 from .database.db_config import Base
 from datetime import datetime
@@ -18,7 +18,14 @@ class Prompt(Base):
     topic = Column(String, index=True)
     subject = Column(String, index=True)
     content = Column(Text)
+    embedding = Column(JSON)  # Store embeddings as JSON
     category = Column(String, nullable=True)
+    key_concepts = Column(Text, nullable=True)
+    education_level = Column(String(50), nullable=True)
+    learning_objectives = Column(Text, nullable=True)
+    interactive_features = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     tags = relationship("Tag", secondary=prompt_tags, back_populates="prompts")
 
 class Tag(Base):
@@ -26,14 +33,22 @@ class Tag(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     prompts = relationship("Prompt", secondary=prompt_tags, back_populates="tags")
 
 class HistoryEntry(Base):
     __tablename__ = "history"
 
-    id = Column(String, primary_key=True, index=True)
-    prompt = Column(Text)
-    provider = Column(String)
-    subject = Column(String, nullable=True)
-    html = Column(Text)
-    timestamp = Column(DateTime) 
+    id = Column(Integer, primary_key=True, index=True)
+    prompt_id = Column(Integer, ForeignKey("prompts.id"))
+    user_query = Column(Text)
+    response = Column(Text)
+    provider = Column(String(50), nullable=True)
+    components = Column(Text, nullable=True)
+    materials = Column(Text, nullable=True)
+    lights = Column(Text, nullable=True)
+    render_settings = Column(Text, nullable=True)
+    animation_speed = Column(Float, nullable=True)
+    narration_texts = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    prompt = relationship("Prompt") 
