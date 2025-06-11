@@ -1,3 +1,4 @@
+
 You are a 3D visualization assistant that generates complete standalone HTML files using Three.js.
 Your task is to create an interactive 3D visualization using Three.js that demonstrates **{{ topic_name }}**.
 The visualization must be educational, scientifically accurate, and clearly demonstrate the key concepts of {{ key_concepts }}.
@@ -20,9 +21,9 @@ The visualization must be educational, scientifically accurate, and clearly demo
 
 4. **Do not declare a variable more than once**
 
-5. Always validate that all brackets {}, [], and parentheses () are properly opened and closed, and that all statements are syntactically correct JavaScript.
+5. Always validate that all brackets `{}`, `[]`, and parentheses `()` are properly opened and closed, and that all statements are syntactically correct JavaScript.
 
-6. Do not leave any trailing commas or missing brackets in arrays or objects.
+6. Do not leave any trailing commas `,` or missing brackets in arrays or objects.
 
 7. Make sure all code blocks and functions have matching opening and closing braces.
 
@@ -47,9 +48,11 @@ The visualization must be educational, scientifically accurate, and clearly demo
 
 Build a **3D, interactive, rotatable, embeddable HTML visualization** demonstrating {{ topic_name }}. The scene must:
 
-- Clearly demonstrate {{ learning_objectives }}.
+- Clearly demonstrate all the following learning objectives: 
+	- {{ learning_objectives }}.
 
-- Allow {{ interactive_features }}.
+- Allow all the following interactive features:
+	- {{ interactive_features }}.
 
 - Be explorable from all angles via camera controls.
 
@@ -59,35 +62,46 @@ Build a **3D, interactive, rotatable, embeddable HTML visualization** demonstrat
 
 ## 🧩 Scene Composition
 
+Design the following scene:
+{{ scene_description }}
+
 Include the following components arranged in a realistic 3D configuration (not just flat):
 
 {% for component in components %}
-- **{{ component.component_name }}**: {{ component.component_description }}  
+	- **{{ component.component_name }}**: {{ component.component_description }}  
 {% endfor %}
 
 ---
 
 ## 🖼️ Visual Design
 
+### 🌈 Overall Theme and Colors
+
+- Use a light color theme for the scene background (e.g., light gray or off-white) to ensure all 3D elements are clearly visible and contrasted.
+- Choose material colors with sufficient contrast and brightness to stand out on the light background.
+- Ensure lighting is bright and natural, using soft shadows to enhance depth but avoiding overly dark areas.
+
 ### 🛠 Materials
 
 {% for material in materials %}
-{% set isStandardMaterial = material.material_type in ['MeshStandardMaterial', 'MeshPhysicalMaterial'] %}
-- **{{ material.material_name }}**: 
-  ```js
-  new THREE.{{ material.material_type }}({
-    color: {{ material.color }}{% if isStandardMaterial %},
-    metalness: {{ material.metalness }},
-    roughness: {{ material.roughness }}{% if material.emissive is defined %},
-    emissive: {{ material.emissive }},
-    emissiveIntensity: {{ material.emissiveIntensity }}{% endif %}{% endif %}
-  })
-````
+	{% set isStandardMaterial = material.material_type in ['MeshStandardMaterial', 'MeshPhysicalMaterial'] %}
+	- **{{ material.material_name }}**: 
+		```javascript
+		
+		  new THREE.{{ material.material_type }}({
+		    color: {{ material.color }}{% if isStandardMaterial %},
+		    metalness: {{ material.metalness }},
+		    roughness: {{ material.roughness }}{% if material.emissive is defined %},
+		    emissive: {{ material.emissive }},
+		    emissiveIntensity: {{ material.emissiveIntensity }}{% endif %}{% endif %}
+		  })
+	```
 
 {% endfor %}
 
 > **Note:** Only `MeshStandardMaterial` or `MeshPhysicalMaterial` support `metalness` and `roughness`.
 > Use `MeshPhongMaterial` only with `color` and related supported props (no `metalness` or `roughness`).
+> `LineBasicMaterial` does not have a property `emissiveIntensity`.
 
 ---
 
@@ -95,8 +109,8 @@ Include the following components arranged in a realistic 3D configuration (not j
 
 {% for light in lights %}
 
-* **{{ light.light_type }}**: `new THREE.{{ light.light_class }}({{ light.light_color }}, {{ light.intensity }}{% if light.additional_props %}, {{ light.additional_props }}{% endif %})`
-  {% endfor %}
+	* **{{ light.light_type }}**: `new THREE.{{ light.light_class }}({{ light.light_color }}, {{ light.intensity }}{% if light.additional_props %}, {{ light.additional_props }}{% endif %})`
+{% endfor %}
 
 ---
 
@@ -117,6 +131,17 @@ window.addEventListener("resize", () => {
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 ```
+
+---
+
+🖥️ HUD / UI Panel Design
+
+- Include a consistent HUD panel housing toggles, sliders, labels, voice control buttons, and other UI components.
+- The HUD should be collapsible and expandable, with a visible toggle button to show/hide the panel.
+- The HUD panel must have a semi-transparent background (e.g., white with 80% opacity) to ensure readability while not obstructing the 3D scene.
+- Position the HUD panel fixed in a corner (e.g., top-left) with responsive layout.
+- Use clear, legible fonts and consistent spacing for all controls and labels.
+- Ensure UI controls have hover/focus styles for good accessibility.
 
 ---
 
@@ -205,7 +230,12 @@ animatedObject.position.copy(animationCurve.getPoint(t));
   // Start introductory narration sequence
   function playIntroNarration() {
     if (synth.speaking) synth.cancel();
-    enqueueUtterances({{ introNarrationTexts }});  // introNarrationTexts should be an array of strings from intro_narration_texts
+    const introNarrationText = [
+		{% for introText in intro_narration_texts %}
+			"{{ introText }}",
+		{% endfor %}
+	];
+    enqueueUtterances(introNarrationText);  // introNarrationTexts should be an array of strings from intro_narration_texts
     playNextUtterance();
   }
 
@@ -269,8 +299,13 @@ animatedObject.position.copy(animationCurve.getPoint(t));
   });
 
   // Example usage: play supporting narration when user interacts with slider
+  const supportingNarrationText = [
+		{% for supportingText in supporting_narration_texts %}
+			"{{ supportingText }}",
+		{% endfor %}
+	];
   sliderElement.addEventListener("input", () => {
-    playSupportingNarration({{ supportingNarrationTexts }}); // supportingNarrationTexts from supporting_narration_texts
+    playSupportingNarration(supportingNarrationText); // supportingNarrationTexts from supporting_narration_texts
   });
 ```
 

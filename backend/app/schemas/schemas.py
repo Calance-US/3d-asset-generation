@@ -58,6 +58,7 @@ class PromptConfig(BaseModel):
     tts_pitch: float
     intro_narration_texts: List[str]
     supporting_narration_texts: List[str]
+    scene_description: str
 
 class GenerateRequest(BaseModel):
     topic: str
@@ -140,6 +141,7 @@ class EnhancedPromptResponse(BaseModel):
     education_level: str
     learning_objectives: str
     interactive_features: str
+    scene_description: str
     components: List[ComponentConfig]
     materials: List[MaterialConfig]
     lights: List[LightConfig]

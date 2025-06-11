@@ -384,6 +384,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             "animation_speed": request.config.animation_speed if request.config else 1.0,
             "intro_narration_texts": json.dumps(request.config.intro_narration_texts) if request.config else None,
             "supporting_narration_texts": json.dumps(request.config.supporting_narration_texts) if request.config else None,
+            "scene_description": request.config.scene_description if request.config else None,
             "created_at": datetime.now()
         }
         create_history_entry(db, history_entry)
@@ -440,7 +441,8 @@ async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
                     "animation_speed": entry.animation_speed or 1.0,
                     "intro_narration_texts": json.loads(entry.intro_narration_texts) if entry.intro_narration_texts and entry.intro_narration_texts.strip() else [],
                     "supporting_narration_texts": json.loads(entry.supporting_narration_texts) if entry.supporting_narration_texts and entry.supporting_narration_texts.strip() else [],
-                    "interactive_description": entry.prompt.interactive_features if entry.prompt else ""
+                    "interactive_description": entry.prompt.interactive_features if entry.prompt else "",
+                    "scene_description": entry.scene_description if entry.scene_description else ""
                 }
             )
             for entry in history
@@ -489,7 +491,8 @@ async def get_history_entry(entry_id: str, db: Session = Depends(get_db)) -> His
                 "curve_points": [{"x": 0, "y": 0, "z": 0}],
                 "tts_language": "en-US",
                 "tts_rate": 1.0,
-                "tts_pitch": 1.0
+                "tts_pitch": 1.0,
+                "scene_description": entry.scene_description if entry.scene_description else ""
             }
         )
     except Exception as e:
@@ -751,6 +754,7 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
             "education_level": "choose between Elementary, Middle School, High School or College",
             "learning_objectives": "What students will learn (max 200 chars)",
             "interactive_features": "What users can interact with in the scene (max 200 chars)",
+            "scene_description": "A detailed description of the 3D scene with realistic details(max 1000 chars)",
             "components": [
                 {{
                     "component_name": "Name of a 3D component required in the 3D scene (max 50 chars)",
@@ -761,10 +765,10 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
                 {{
                     "material_name": "Name of the material (based on the components)",
                     "material_type": "Type of material (choose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial)",
-                    "color": "0xRRGGBB",
+                    "color": "#RRGGBB",
                     "metalness": 0.5,
                     "roughness": 0.5,
-                    "emissive": "0xRRGGBB",
+                    "emissive": "#RRGGBB",
                     "emissiveIntensity": 0.5
                 }}
             ],
@@ -772,7 +776,7 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
                 {{
                     "light_type": "Type of light (max 50 chars)",
                     "light_class": "THREE.LightClass [choose between DirectionalLight, AmbientLight, HemisphereLight]",
-                    "light_color": "0xRRGGBB",
+                    "light_color": "#RRGGBB",
                     "intensity": 0.5
                 }}
             ],
@@ -848,7 +852,7 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
                     required_fields = [
                         "topic_name", "key_concepts", "education_level", "learning_objectives",
                         "interactive_features", "components", "materials", "lights",
-                        "interactive_description", "animated_elements", "intro_narration_texts", "supporting_narration_texts"
+                        "interactive_description", "animated_elements", "intro_narration_texts", "supporting_narration_texts", "scene_description"
                     ]
                     missing_fields = [field for field in required_fields if field not in enhanced_config]
                     if missing_fields:

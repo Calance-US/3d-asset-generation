@@ -42,7 +42,8 @@ export default function Generator() {
     tts_rate: 1.0,
     tts_pitch: 1.0,
     intro_narration_texts: [],
-    supporting_narration_texts: []
+    supporting_narration_texts: [],
+    scene_description: ""
   });
 
   const [enhancing, setEnhancing] = useState(false);
@@ -213,6 +214,7 @@ export default function Generator() {
           lights: enhancedData.lights,
           interactive_description: enhancedData.interactive_description,
           animated_elements: enhancedData.animated_elements,
+          scene_description: enhancedData.scene_description || '',
           intro_narration_texts: enhancedData.intro_narration_texts || [],
           supporting_narration_texts: enhancedData.supporting_narration_texts || [],
           renderer: {
@@ -284,6 +286,7 @@ export default function Generator() {
           interactive_features: entry.config.interactive_features || '',
           interactive_description: entry.config.interactive_description || '',
           animated_elements: entry.config.animated_elements || '',
+          scene_description: entry.config.scene_description || '',
           
           // Complex objects
           components: components,
@@ -357,7 +360,8 @@ export default function Generator() {
       tts_rate: 1.0,
       tts_pitch: 1.0,
       intro_narration_texts: [],
-      supporting_narration_texts: []
+      supporting_narration_texts: [],
+      scene_description: ""
     });
   }
 
@@ -632,6 +636,21 @@ export default function Generator() {
                             placeholder="Enter key concepts..."
                             aria-label="Key Concepts"
                             title="Key Concepts"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300">
+                            Scene Description
+                          </label>
+                          <textarea
+                            value={config.scene_description || ''}
+                            onChange={(e) => setConfig(prev => ({ ...prev, scene_description: e.target.value }))}
+                            className="mt-1 block w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                            rows={3}
+                            placeholder="Enter a detailed description of the scene..."
+                            aria-label="Scene Description"
+                            title="Scene Description"
                           />
                         </div>
 
