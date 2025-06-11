@@ -382,7 +382,8 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             "lights": json.dumps([light.model_dump() for light in request.config.lights]) if request.config else None,
             "render_settings": json.dumps(request.config.renderer.model_dump()) if request.config else None,
             "animation_speed": request.config.animation_speed if request.config else 1.0,
-            "narration_texts": json.dumps(request.config.narration_texts) if request.config else None,
+            "intro_narration_texts": json.dumps(request.config.intro_narration_texts) if request.config else None,
+            "supporting_narration_texts": json.dumps(request.config.supporting_narration_texts) if request.config else None,
             "created_at": datetime.now()
         }
         create_history_entry(db, history_entry)
@@ -437,16 +438,9 @@ async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
                     "lights": json.loads(entry.lights) if entry.lights and entry.lights.strip() else [],
                     "render_settings": json.loads(entry.render_settings) if entry.render_settings and entry.render_settings.strip() else {},
                     "animation_speed": entry.animation_speed or 1.0,
-                    "narration_texts": json.loads(entry.narration_texts) if entry.narration_texts and entry.narration_texts.strip() else [],
-                    "interactive_description": entry.prompt.interactive_features if entry.prompt else "",
-                    "animated_elements": entry.prompt.interactive_features if entry.prompt else "",
-                    "three_js_url": "https://esm.sh/three@0.155.0",
-                    "orbit_controls_url": "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
-                    "camera_controls": "OrbitControls",
-                    "curve_points": [{"x": 0, "y": 0, "z": 0}],
-                    "tts_language": "en-US",
-                    "tts_rate": 1.0,
-                    "tts_pitch": 1.0
+                    "intro_narration_texts": json.loads(entry.intro_narration_texts) if entry.intro_narration_texts and entry.intro_narration_texts.strip() else [],
+                    "supporting_narration_texts": json.loads(entry.supporting_narration_texts) if entry.supporting_narration_texts and entry.supporting_narration_texts.strip() else [],
+                    "interactive_description": entry.prompt.interactive_features if entry.prompt else ""
                 }
             )
             for entry in history
@@ -485,7 +479,8 @@ async def get_history_entry(entry_id: str, db: Session = Depends(get_db)) -> His
                 "lights": json.loads(entry.lights) if entry.lights else [],
                 "render_settings": json.loads(entry.render_settings) if entry.render_settings else {},
                 "animation_speed": entry.animation_speed or 1.0,
-                "narration_texts": json.loads(entry.narration_texts) if entry.narration_texts else [],
+                "intro_narration_texts": json.loads(entry.intro_narration_texts) if entry.intro_narration_texts else [],
+                "supporting_narration_texts": json.loads(entry.supporting_narration_texts) if entry.supporting_narration_texts else [],
                 "interactive_description": entry.prompt.interactive_features if entry.prompt else "",
                 "animated_elements": entry.prompt.interactive_features if entry.prompt else "",
                 "three_js_url": "https://esm.sh/three@0.155.0",
@@ -753,7 +748,7 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
         {{
             "topic_name": "A short, concise name for the topic (max 20 chars)",
             "key_concepts": "Comma separated main concepts to be visualized (max 200 chars)",
-            "education_level": "chose between Elementary, Middle School, High School or College",
+            "education_level": "choose between Elementary, Middle School, High School or College",
             "learning_objectives": "What students will learn (max 200 chars)",
             "interactive_features": "What users can interact with in the scene (max 200 chars)",
             "components": [
@@ -764,25 +759,30 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
             ],
             "materials": [
                 {{
-                    "material_name": "Name of the material (based on the components) and the threejs material class [threejs material class - chose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial]",
+                    "material_name": "Name of the material (based on the components)",
+                    "material_type": "Type of material (choose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial)",
                     "color": "0xRRGGBB",
                     "metalness": 0.5,
-                    "roughness": 0.5
+                    "roughness": 0.5,
+                    "emissive": "0xRRGGBB",
+                    "emissiveIntensity": 0.5
                 }}
             ],
             "lights": [
                 {{
                     "light_type": "Type of light (max 50 chars)",
-                    "light_class": "THREE.LightClass [threejs light class - chose between DirectionalLight, AmbientLight, HemisphereLight]",
+                    "light_class": "THREE.LightClass [choose between DirectionalLight, AmbientLight, HemisphereLight]",
                     "light_color": "0xRRGGBB",
                     "intensity": 0.5
                 }}
             ],
             "interactive_description": "How users can interact with the visualization (max 200 chars)",
             "animated_elements": "What components should be animated and how (max 200 chars)",
-            "narration_texts": [
-                "Text to be narrated during the start of the visualization as an introduction to the topic (max 200 chars)",
-                "Other texts to be narrated during the visualization as a part of the user interaction (max 100 chars each)"
+            "intro_narration_texts": [
+                "Concise introductory narration texts about the topic to be played at the start (each max 500 chars)"
+            ],
+            "supporting_narration_texts": [
+                "Short texts to be played during user interactions explaining controls or feedback (each max 100 chars)"
             ]
         }}
 
@@ -848,7 +848,7 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
                     required_fields = [
                         "topic_name", "key_concepts", "education_level", "learning_objectives",
                         "interactive_features", "components", "materials", "lights",
-                        "interactive_description", "animated_elements", "narration_texts"
+                        "interactive_description", "animated_elements", "intro_narration_texts", "supporting_narration_texts"
                     ]
                     missing_fields = [field for field in required_fields if field not in enhanced_config]
                     if missing_fields:
@@ -867,7 +867,8 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
                             pass
 
                     # Truncate narration texts
-                    enhanced_config["narration_texts"] = [text for text in enhanced_config.get("narration_texts", [])]
+                    enhanced_config["intro_narration_texts"] = [text for text in enhanced_config.get("intro_narration_texts", [])]
+                    enhanced_config["supporting_narration_texts"] = [text for text in enhanced_config.get("supporting_narration_texts", [])]
 
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON structure: {str(e)}")

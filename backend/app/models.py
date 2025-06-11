@@ -49,6 +49,7 @@ class HistoryEntry(Base):
     lights = Column(Text, nullable=True)
     render_settings = Column(Text, nullable=True)
     animation_speed = Column(Float, nullable=True)
-    narration_texts = Column(Text, nullable=True)
+    intro_narration_texts = Column(Text, nullable=True)
+    supporting_narration_texts = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     prompt = relationship("Prompt") 

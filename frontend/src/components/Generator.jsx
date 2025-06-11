@@ -41,10 +41,13 @@ export default function Generator() {
     tts_language: "en-US",
     tts_rate: 1.0,
     tts_pitch: 1.0,
-    narration_texts: []
+    intro_narration_texts: [],
+    supporting_narration_texts: []
   });
 
   const [enhancing, setEnhancing] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   // Load history on component mount
   useEffect(() => {
@@ -197,7 +200,6 @@ export default function Generator() {
       console.info("Successfully received enhanced configuration");
       console.debug("Enhanced configuration:", enhancedData);
       
-      // Update the config with enhanced values
       setConfig(prev => {
         const newConfig = {
           ...prev,
@@ -211,7 +213,8 @@ export default function Generator() {
           lights: enhancedData.lights,
           interactive_description: enhancedData.interactive_description,
           animated_elements: enhancedData.animated_elements,
-          narration_texts: enhancedData.narration_texts,
+          intro_narration_texts: enhancedData.intro_narration_texts || [],
+          supporting_narration_texts: enhancedData.supporting_narration_texts || [],
           renderer: {
             ...prev.renderer,
             antialias: enhancedData.renderer?.antialias ?? true,
@@ -268,7 +271,8 @@ export default function Generator() {
         const materials = entry.config.materials || [];
         const lights = entry.config.lights || [];
         const renderSettings = entry.config.render_settings || {};
-        const narrationTexts = entry.config.narration_texts || [];
+        const introNarrationTexts = entry.config.intro_narration_texts || [];
+        const supportingNarrationTexts = entry.config.supporting_narration_texts || [];
 
         setConfig(prev => ({
           ...prev,
@@ -285,7 +289,8 @@ export default function Generator() {
           components: components,
           materials: materials,
           lights: lights,
-          narration_texts: narrationTexts,
+          intro_narration_texts: introNarrationTexts,
+          supporting_narration_texts: supportingNarrationTexts,
           
           // Required fields with defaults
           three_js_url: entry.config.three_js_url || "https://esm.sh/three@0.155.0",
@@ -351,7 +356,8 @@ export default function Generator() {
       tts_language: "en-US",
       tts_rate: 1.0,
       tts_pitch: 1.0,
-      narration_texts: []
+      intro_narration_texts: [],
+      supporting_narration_texts: []
     });
   }
 
@@ -389,6 +395,72 @@ export default function Generator() {
       setError(`Error downloading file: ${err.message}`);
     }
   }
+
+  async function handleRegenerate() {
+    if (!html) {
+      console.warn("Attempting to regenerate with no existing visualization");
+      return;
+    }
+
+    try {
+      setRegenerating(true);
+      setError(null);
+      console.info("Starting regeneration process...");
+      console.debug("Regeneration config:", config);
+
+      const response = await fetch("http://localhost:8000/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          topic: prompt,
+          provider: provider,
+          subject: subject,
+          config: config
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Regeneration failed:", errorData);
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.debug("Regeneration response data:", data);
+      
+      setHtml(data.html);
+      console.info("Regeneration completed successfully");
+    } catch (err) {
+      console.error("Error during regeneration:", err);
+      setError(`Error regenerating visualization: ${err.message}`);
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  // Add narration text management functions
+  const addNarrationText = (type, text) => {
+    setConfig(prev => ({
+      ...prev,
+      [type]: [...prev[type], text]
+    }));
+  };
+
+  const removeNarrationText = (type, index) => {
+    setConfig(prev => ({
+      ...prev,
+      [type]: prev[type].filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateNarrationText = (type, index, text) => {
+    setConfig(prev => ({
+      ...prev,
+      [type]: prev[type].map((t, i) => i === index ? text : t)
+    }));
+  };
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -686,6 +758,26 @@ export default function Generator() {
                                   className="w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
                                 />
                               </div>
+                              <div className="flex-1">
+                                <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`material-type-${index}`}>Material Type</label>
+                                <select
+                                  id={`material-type-${index}`}
+                                  value={material.material_type || ''}
+                                  onChange={(e) => {
+                                    const newMaterials = [...config.materials];
+                                    newMaterials[index] = { ...material, material_type: e.target.value };
+                                    setConfig(prev => ({ ...prev, materials: newMaterials }));
+                                  }}
+                                  className="w-full rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
+                                >
+                                  <option value="">Select Type</option>
+                                  <option value="MeshStandardMaterial">Standard Material</option>
+                                  <option value="MeshPhysicalMaterial">Physical Material</option>
+                                  <option value="MeshBasicMaterial">Basic Material</option>
+                                  <option value="MeshPhongMaterial">Phong Material</option>
+                                  <option value="MeshLambertMaterial">Lambert Material</option>
+                                </select>
+                              </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1" htmlFor={`material-color-${index}`}>Material Color</label>
                                 <input
@@ -754,7 +846,7 @@ export default function Generator() {
                             onClick={() => {
                               setConfig(prev => ({
                                 ...prev,
-                                materials: [...prev.materials, { material_name: '', color: '#808080', metalness: 0.5, roughness: 0.5 }]
+                                materials: [...prev.materials, { material_name: '', material_type: '', color: '#808080', metalness: 0.5, roughness: 0.5 }]
                               }));
                             }}
                             className="mt-2 text-sm text-purple-400 hover:text-purple-300"
@@ -953,45 +1045,64 @@ export default function Generator() {
                         </div>
 
                         {/* Narration Texts */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-300 mb-2">
-                            Narration Texts
-                          </label>
-                          {config.narration_texts.map((text, index) => (
-                            <div key={index} className="flex gap-2 mb-2">
-                              <textarea
-                                value={text}
-                                onChange={(e) => {
-                                  const newTexts = [...config.narration_texts];
-                                  newTexts[index] = e.target.value;
-                                  setConfig(prev => ({ ...prev, narration_texts: newTexts }));
-                                }}
-                                placeholder="Narration text"
-                                className="flex-1 rounded-md border-gray-700 bg-gray-900 text-white shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                                rows={2}
-                              />
-                              <button
-                                onClick={() => {
-                                  const newTexts = config.narration_texts.filter((_, i) => i !== index);
-                                  setConfig(prev => ({ ...prev, narration_texts: newTexts }));
-                                }}
-                                className="px-2 py-1 text-red-400 hover:text-red-300"
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ))}
-                          <button
-                            onClick={() => {
-                              setConfig(prev => ({
-                                ...prev,
-                                narration_texts: [...prev.narration_texts, '']
-                              }));
-                            }}
-                            className="mt-2 text-sm text-purple-400 hover:text-purple-300"
-                          >
-                            + Add Narration
-                          </button>
+                        <div className="space-y-4">
+                          <h4 className="text-md font-medium">Narration Texts</h4>
+                          
+                          {/* Intro Narration */}
+                          <div className="space-y-2">
+                            <h5 className="text-sm font-medium text-gray-300">Introduction</h5>
+                            {config.intro_narration_texts.map((text, index) => (
+                              <div key={`intro-${index}`} className="flex space-x-2">
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => updateNarrationText('intro_narration_texts', index, e.target.value)}
+                                  className="flex-1 px-3 py-2 bg-gray-700 rounded-md text-white"
+                                  placeholder="Enter introduction text"
+                                />
+                                <button
+                                  onClick={() => removeNarrationText('intro_narration_texts', index)}
+                                  className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded-md text-white"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => addNarrationText('intro_narration_texts', '')}
+                              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white"
+                            >
+                              Add Introduction Text
+                            </button>
+                          </div>
+
+                          {/* Supporting Narration */}
+                          <div className="space-y-2">
+                            <h5 className="text-sm font-medium text-gray-300">Supporting Information</h5>
+                            {config.supporting_narration_texts.map((text, index) => (
+                              <div key={`support-${index}`} className="flex space-x-2">
+                                <input
+                                  type="text"
+                                  value={text}
+                                  onChange={(e) => updateNarrationText('supporting_narration_texts', index, e.target.value)}
+                                  className="flex-1 px-3 py-2 bg-gray-700 rounded-md text-white"
+                                  placeholder="Enter supporting text"
+                                />
+                                <button
+                                  onClick={() => removeNarrationText('supporting_narration_texts', index)}
+                                  className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded-md text-white"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => addNarrationText('supporting_narration_texts', '')}
+                              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white"
+                            >
+                              Add Supporting Text
+                            </button>
+                          </div>
                         </div>
                       </Disclosure.Panel>
                     </>
@@ -1051,6 +1162,105 @@ export default function Generator() {
                       title="3D Visualization"
                     />
                   </div>
+                </div>
+              )}
+
+              {html && (
+                <div className="mt-4 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <button
+                      onClick={() => setShowConfig(!showConfig)}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-md text-white font-medium transition-colors"
+                    >
+                      {showConfig ? "Hide Configuration" : "Show Configuration"}
+                    </button>
+                    <button
+                      onClick={handleRegenerate}
+                      disabled={regenerating}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-medium transition-colors disabled:opacity-50"
+                    >
+                      {regenerating ? "Regenerating..." : "Regenerate"}
+                    </button>
+                  </div>
+
+                  {showConfig && (
+                    <div className="bg-gray-800 rounded-lg p-4 space-y-4">
+                      <h3 className="text-lg font-semibold mb-4">Visualization Configuration</h3>
+                      
+                      {/* Renderer Settings */}
+                      <div className="space-y-2">
+                        <h4 className="text-md font-medium">Renderer Settings</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="antialias"
+                              checked={config.renderer.antialias}
+                              onChange={(e) => setConfig(prev => ({
+                                ...prev,
+                                renderer: { ...prev.renderer, antialias: e.target.checked }
+                              }))}
+                              className="rounded border-gray-700 bg-gray-900 text-purple-600 focus:ring-purple-500"
+                            />
+                            <label htmlFor="antialias">Antialiasing</label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="shadowMapEnabled"
+                              checked={config.renderer.shadowMapEnabled}
+                              onChange={(e) => setConfig(prev => ({
+                                ...prev,
+                                renderer: { ...prev.renderer, shadowMapEnabled: e.target.checked }
+                              }))}
+                              className="rounded border-gray-700 bg-gray-900 text-purple-600 focus:ring-purple-500"
+                            />
+                            <label htmlFor="shadowMapEnabled">Shadows</label>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Animation Speed */}
+                      <div className="space-y-2">
+                        <h4 className="text-md font-medium">Animation Speed</h4>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="2"
+                          step="0.1"
+                          value={config.animation_speed}
+                          onChange={(e) => setConfig(prev => ({
+                            ...prev,
+                            animation_speed: parseFloat(e.target.value)
+                          }))}
+                          className="w-full"
+                        />
+                        <div className="text-sm text-gray-400">
+                          Speed: {config.animation_speed}x
+                        </div>
+                      </div>
+
+                      {/* Tone Mapping Exposure */}
+                      <div className="space-y-2">
+                        <h4 className="text-md font-medium">Tone Mapping Exposure</h4>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="2"
+                          step="0.1"
+                          value={config.renderer.toneMappingExposure}
+                          onChange={(e) => setConfig(prev => ({
+                            ...prev,
+                            renderer: { ...prev.renderer, toneMappingExposure: parseFloat(e.target.value) }
+                          }))}
+                          className="w-full"
+                        />
+                        <div className="text-sm text-gray-400">
+                          Exposure: {config.renderer.toneMappingExposure}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

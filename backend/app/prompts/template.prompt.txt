@@ -6,17 +6,17 @@ The visualization must be educational, scientifically accurate, and clearly demo
 
 1. In your HTML `<head>`, include a `<script type="module">` block for ES6 imports:
 
-    ```html
-	  <script type="module">
-	    import * as THREE from "{{ three_js_url }}";
-	    import { OrbitControls } from "{{ orbit_controls_url }}";
-	    {{ additional_imports_comment }}
-	  </script>
-    ```
+  ```html
+    <script type="module">
+      import * as THREE from "{{ three_js_url }}";
+      import { OrbitControls } from "{{ orbit_controls_url }}";
+      {{ additional_imports_comment }}
+    </script>
+  ```
 
-2.  Ensure `type="module"` so that browsers load these as ES modules.
-    
-3.  No other external scripts or build steps—this must run standalone in modern browsers.
+2. Ensure `type="module"` so that browsers load these as ES modules.
+
+3. No other external scripts or build steps—this must run standalone in modern browsers.
 
 4. **Do not declare a variable more than once**
 
@@ -33,53 +33,72 @@ The visualization must be educational, scientifically accurate, and clearly demo
 10. Double-check all array pushes and object literals for matching braces and parentheses.
 
 11. The final generated code must be a valid JavaScript module that runs without any syntax errors in a modern browser.
-    
+
+---
 
 ## 🎯 Educational Requirements
 
 **TOPIC:** {{ topic_name }}  
 **LEVEL:** {{ education_level }}
 
-----------
+---
 
 ## 🎯 Educational Goal
 
 Build a **3D, interactive, rotatable, embeddable HTML visualization** demonstrating {{ topic_name }}. The scene must:
 
--   Clearly demonstrate {{ learning_objectives }}.
-    
--   Allow {{ interactive_features }}.
-    
--   Be explorable from all angles via camera controls.
-    
--   Be grounded in real-world physical detail and lighting.
-    
+- Clearly demonstrate {{ learning_objectives }}.
 
-----------
+- Allow {{ interactive_features }}.
+
+- Be explorable from all angles via camera controls.
+
+- Be grounded in real-world physical detail and lighting.
+
+---
 
 ## 🧩 Scene Composition
 
 Include the following components arranged in a realistic 3D configuration (not just flat):
 
 {% for component in components %}
--   **{{ component.component_name }}**: {{ component.component_description }}  
+- **{{ component.component_name }}**: {{ component.component_description }}  
 {% endfor %}
 
-----------
+---
 
 ## 🖼️ Visual Design
 
-### 🛠 Materials (`THREE.MeshStandardMaterial` or others)
+### 🛠 Materials
 
 {% for material in materials %}
-    -   **{{ material.material_name }}**: `{ color: {{ material.color }}, metalness: {{ material.metalness }}, roughness: {{ material.roughness }}{% if material.emissive %}, emissive: {{ material.emissive }}, emissiveIntensity: {{ material.emissiveIntensity }}{% endif %} }`  
+{% set isStandardMaterial = material.material_type in ['MeshStandardMaterial', 'MeshPhysicalMaterial'] %}
+- **{{ material.material_name }}**: 
+  ```js
+  new THREE.{{ material.material_type }}({
+    color: {{ material.color }}{% if isStandardMaterial %},
+    metalness: {{ material.metalness }},
+    roughness: {{ material.roughness }}{% if material.emissive is defined %},
+    emissive: {{ material.emissive }},
+    emissiveIntensity: {{ material.emissiveIntensity }}{% endif %}{% endif %}
+  })
+````
+
 {% endfor %}
+
+> **Note:** Only `MeshStandardMaterial` or `MeshPhysicalMaterial` support `metalness` and `roughness`.
+> Use `MeshPhongMaterial` only with `color` and related supported props (no `metalness` or `roughness`).
+
+---
 
 ### 💡 Lighting
 
 {% for light in lights %}
-    -   **{{ light.light_type }}**: `new THREE.{{ light.light_class }}({{ light.light_color }}, {{ light.intensity }}{% if light.additional_props %}, {{ light.additional_props }}{% endif %})`  
-{% endfor %}
+
+* **{{ light.light_type }}**: `new THREE.{{ light.light_class }}({{ light.light_color }}, {{ light.intensity }}{% if light.additional_props %}, {{ light.additional_props }}{% endif %})`
+  {% endfor %}
+
+---
 
 ### ⚙️ Renderer Settings
 
@@ -89,162 +108,190 @@ renderer.shadowMap.enabled = {{ renderer.shadowMapEnabled }};
 renderer.shadowMap.type = THREE.{{ renderer.shadowMapType }};
 renderer.toneMapping = THREE.{{ renderer.toneMapping }};
 renderer.outputColorSpace = THREE.{{ renderer.outputColorSpace }};
+document.body.appendChild(renderer.domElement);
+window.addEventListener("resize", () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+renderer.setSize(window.innerWidth, window.innerHeight);
 ```
 
-Ensure appending `renderer.domElement` to `document.body` and handle resizing.
-
-----------
+---
 
 ## 🔄 Interactivity & Animation
 
--   **Camera Controls**: Use `OrbitControls` imported above to allow {{ camera_controls }}.
-    
--   {{ interactive_description }}
-    
--   Animate {{ animated_elements }} along specified paths or motions:
-    
-    Example animation motion snippet:
-    
-    ```js
-    // Example animation code snippet
-    const curve = new THREE.CatmullRomCurve3([
-      {% for point in curve_points %}
-      new THREE.Vector3({{ point.x }}, {{ point.y }}, {{ point.z }}),
-      {% endfor %}
-    ]);
-    
-    ```
-  
-- **User Interaction**:  
-  Include interactive elements such as clickable objects, sliders, or buttons to control key aspects of the simulation. For example:  
-  - Toggle switches or start/stop buttons.  
-  - Sliders to adjust parameters (e.g., compression, voltage, flow rate).  
-  - Click or drag controls to manipulate objects or trigger state changes.  
-  Use `THREE.Raycaster` or appropriate event listeners to handle mouse or touch input.
+* **Camera Controls**: Use `OrbitControls` imported above to allow {{ camera_controls }}.
 
-- **Animation Logic**:  
-  Animate relevant scene elements to clearly demonstrate the physical phenomena involved, such as:  
-  - Moving particles (e.g., electrons, gas molecules) along predefined paths using `THREE.CatmullRomCurve3` or free movement with collision detection.  
-  - Translating or rotating mechanical parts (e.g., piston moving along Y-axis, switch toggling).  
-  - Visual indicators showing flow direction, magnitude, or state changes.  
-  Include smooth, continuous animations updated per frame with time-based parameters (e.g., elapsed time, speed multipliers).
+* {{ interactive_description }}
 
-  Example animation update snippet:
+* Animate {{ animated_elements }} along specified paths or motions using e.g.:
 
-  ```js
-  const t = (elapsed * {{ animation_speed }} + offset) % 1;
-  animatedObject.position.copy(animationCurve.getPoint(t));
-  ```
+```js
+// Example animation curve class (standalone, NOT attached to THREE)
+class CustomCurve extends THREE.Curve {
+  constructor(params) {
+    super();
+    // initialize params
+  }
+  getPoint(t) {
+    // return THREE.Vector3 for param t in [0,1]
+  }
+}
+```
 
-- Physical Simulation (if applicable):
-  Incorporate simple physics approximations, such as:
+* Use custom classes standalone; **do not add properties or classes to the imported THREE namespace**.
 
-    - Elastic collisions between particles and boundaries.
+* Example animation update snippet:
 
-    - Dynamic calculations reflecting real-world relationships (e.g., pressure inversely proportional to volume, current proportional to voltage/resistance).
-      Update related metrics in real-time and reflect them via UI overlays or in-scene labels.
+```js
+const t = (elapsed * {{ animation_speed }} + offset) % 1;
+animatedObject.position.copy(animationCurve.getPoint(t));
+```
 
-- Visual Feedback:
-  Provide clear visual feedback corresponding to user actions and animation states, such as:
+* Include UI controls such as sliders or buttons for parameter adjustment; use event listeners to update scene parameters.
 
-    - Highlighting toggled switches or active components.
+* Use `THREE.Raycaster` or event listeners to handle mouse/touch interactivity.
 
-    - Changing particle emission or brightness to indicate flow intensity.
+* Ensure smooth, continuous animation with `requestAnimationFrame`.
 
-    - Updating text panels or HUD elements with current simulation values.
-
-- Optional UI Components:
-  Include on-screen controls like sliders, buttons, or panels to allow user input and display real-time data. Synchronize UI changes with 3D scene updates.
-
-- Ensure all interactive and animated elements are accessible and functional via mouse and touch input, and that animations loop or transition smoothly without abrupt jumps.
-    
-
-----------
+---
 
 ## 🔊 Voice Narration
 
--   Integrate audio voiceover narration using the Web Speech API.
-    
--   Use the following example setup for speech synthesis:
-    
+- Add an **introductory narration sequence** played at the start of the visualization, using the texts from `intro_narration_texts`.
+
+- Add **supporting narration texts** played in response to user interactions (e.g., slider changes, button clicks), using the texts from `supporting_narration_texts`.
+
+- Use the Web Speech API with queue management to play multiple utterances sequentially without overlap.
+
+- Provide on-screen audio controls to Play, Pause, and Stop narration playback.
+
+- Example JavaScript setup:
 
 ```js
-const synth = window.speechSynthesis;
-let utteranceQueue = [];
+  const synth = window.speechSynthesis;
+  let utteranceQueue = [];
+  let currentUtterance = null;
 
-function speak(text) {
-  if (!synth) return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = '{{ tts_language }}';
-  utterance.rate = {{ tts_rate }};
-  utterance.pitch = {{ tts_pitch }};
-  synth.speak(utterance);
-  return utterance;
-}
+  // Enqueue multiple utterances to play sequentially
+  function enqueueUtterances(texts) {
+    utteranceQueue = texts.map(text => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = '{{ tts_language }}';
+      utterance.rate = {{ tts_rate }};
+      utterance.pitch = {{ tts_pitch }};
+      return utterance;
+    });
+  }
 
-{% for text in narration_texts %}
-speak("{{ text }}");
-{% endfor %}
+  // Play the next utterance in the queue
+  function playNextUtterance() {
+    if (utteranceQueue.length === 0) {
+      currentUtterance = null;
+      resetAudioButtons();
+      return;
+    }
+    currentUtterance = utteranceQueue.shift();
+    currentUtterance.onend = () => {
+      currentUtterance = null;
+      playNextUtterance();
+    };
+    synth.speak(currentUtterance);
+    updateAudioButtonsPlaying();
+  }
+
+  // Start introductory narration sequence
+  function playIntroNarration() {
+    if (synth.speaking) synth.cancel();
+    enqueueUtterances({{ introNarrationTexts }});  // introNarrationTexts should be an array of strings from intro_narration_texts
+    playNextUtterance();
+  }
+
+  // Play supporting narration (e.g., triggered by interactions)
+  function playSupportingNarration(texts) {
+    if (synth.speaking) synth.cancel();
+    enqueueUtterances(texts);
+    playNextUtterance();
+  }
+
+  // Audio control buttons state management
+  function resetAudioButtons() {
+    playBtn.disabled = false;
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    pauseBtn.textContent = "⏸️ Pause";
+  }
+  function updateAudioButtonsPlaying() {
+    playBtn.disabled = true;
+    pauseBtn.disabled = false;
+    stopBtn.disabled = false;
+  }
+
+  // On-screen audio controls HTML snippet:
+  const audioControlsHTML = `
+    <div id="audioControls">
+      <button id="playNarration" title="Play Intro">▶️ Play</button>
+      <button id="pauseNarration" title="Pause" disabled>⏸️ Pause</button>
+      <button id="stopNarration" title="Stop" disabled>⏹️ Stop</button>
+    </div>
+  `;
+  const audioContainer = document.createElement("div");
+  audioContainer.innerHTML = audioControlsHTML;
+  document.body.appendChild(audioContainer);
+
+  const playBtn = audioContainer.querySelector("#playNarration");
+  const pauseBtn = audioContainer.querySelector("#pauseNarration");
+  const stopBtn = audioContainer.querySelector("#stopNarration");
+
+  // Hook up button events
+  playBtn.addEventListener("click", () => {
+    playIntroNarration();
+  });
+  pauseBtn.addEventListener("click", () => {
+    if (!synth) return;
+    if (synth.speaking && !synth.paused) {
+      synth.pause();
+      pauseBtn.textContent = "▶️ Resume";
+    } else if (synth.paused) {
+      synth.resume();
+      pauseBtn.textContent = "⏸️ Pause";
+    }
+  });
+  stopBtn.addEventListener("click", () => {
+    if (!synth) return;
+    if (synth.speaking) {
+      synth.cancel();
+      utteranceQueue = [];
+    }
+    resetAudioButtons();
+  });
+
+  // Example usage: play supporting narration when user interacts with slider
+  sliderElement.addEventListener("input", () => {
+    playSupportingNarration({{ supportingNarrationTexts }}); // supportingNarrationTexts from supporting_narration_texts
+  });
 ```
 
-```css
-  #audioControls {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: rgba(30,30,30,0.9);
-    padding: 12px;
-    border-radius: 8px;
-    display: flex;
-    gap: 8px;
-    z-index: 15;
-  }
-  #audioControls button {
-    padding: 8px 12px;
-    border: none;
-    border-radius: 4px;
-    background: #646cff;
-    color: white;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s ease;
-  }
-  #audioControls button:hover {
-    background: #535bf2;
-  }
-  #audioControls button:disabled {
-    background: #666;
-    cursor: not-allowed;
-  }
-```
+* Include on-screen audio control buttons for play/pause/stop with proper event handling.
 
-```html
-  <div id="audioControls">
-    <button id="playNarration" title="Play Narration">▶️ Play</button>
-    <button id="pauseNarration" title="Pause Narration" disabled="">⏸️ Pause</button>
-    <button id="stopNarration" title="Stop Narration" disabled="">⏹️ Stop</button>
-  </div>
-```
-
-----------
+---
 
 ## 📦 Output Requirements
 
-1.  **Standalone HTML** file with:
-    
-    -   Proper `<head>`, `<body>`, and `<style>` sections.
-        
-    -   Single `<script type="module">` block containing all imports and logic.
-        
-    -   Responsive design updating on window resize.
-        
-    -   Robust error handling for missing assets or imports.
-        
-2.  **Embedding Support**:
-    
-    -   Fully functional in iframes.
-        
-    -   Responsive to container size changes.
-        
+1. **Standalone HTML** file with:
+
+   * Valid `<head>`, `<body>`, `<style>`, and single `<script type="module">` containing all imports and logic.
+
+   * Responsive design updating on window resize.
+
+   * Robust error handling for missing assets or imports.
+
+2. **Embedding Support**:
+
+   * Fully functional in iframes.
+
+   * Responsive to container size changes.
 
 Return only the complete HTML code with embedded Three.js ES6 imports. Do not include explanations or markdown formatting.

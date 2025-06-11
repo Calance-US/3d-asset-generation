@@ -9,6 +9,7 @@ class ComponentConfig(BaseModel):
 
 class MaterialConfig(BaseModel):
     material_name: str
+    material_type: str
     color: str
     metalness: float
     roughness: float
@@ -55,7 +56,8 @@ class PromptConfig(BaseModel):
     tts_language: str
     tts_rate: float
     tts_pitch: float
-    narration_texts: List[str]
+    intro_narration_texts: List[str]
+    supporting_narration_texts: List[str]
 
 class GenerateRequest(BaseModel):
     topic: str
@@ -143,4 +145,5 @@ class EnhancedPromptResponse(BaseModel):
     lights: List[LightConfig]
     interactive_description: str
     animated_elements: str
-    narration_texts: List[str] 
+    intro_narration_texts: List[str]
+    supporting_narration_texts: List[str]
