@@ -91,11 +91,39 @@ function Admin() {
     subject: "",
     tags: ""
   });
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     loadPrompts();
+    fetchStats();
   }, []);
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/admin/generation-stats');
+      if (!response.ok) {
+        throw new Error('Failed to fetch generation stats');
+      }
+      const data = await response.json();
+      setStats(data);
+    } catch (err) {
+      setStatsError(err.message);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const formatTime = (seconds) => {
+    if (seconds < 60) {
+      return `${seconds.toFixed(2)}s`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds.toFixed(2)}s`;
+  };
 
   const loadPrompts = async () => {
     try {
@@ -206,6 +234,53 @@ function Admin() {
           </button>
         </div>
 
+        {/* Generation Statistics Section */}
+        <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-semibold text-white">Visualization Generation Statistics</h2>
+            <button
+              onClick={fetchStats}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            >
+              Refresh Statistics
+            </button>
+          </div>
+          
+          {statsLoading ? (
+            <div className="text-white">Loading statistics...</div>
+          ) : statsError ? (
+            <div className="text-red-500">Error: {statsError}</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">Total Generations</h3>
+                <p className="text-2xl font-bold text-white">{stats.total_generations}</p>
+              </div>
+              
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">Mean Generation Time</h3>
+                <p className="text-2xl font-bold text-white">{formatTime(stats.mean)}</p>
+              </div>
+              
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">Median Generation Time</h3>
+                <p className="text-2xl font-bold text-white">{formatTime(stats.median)}</p>
+              </div>
+              
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">95th Percentile</h3>
+                <p className="text-2xl font-bold text-white">{formatTime(stats.p95)}</p>
+              </div>
+              
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">99th Percentile</h3>
+                <p className="text-2xl font-bold text-white">{formatTime(stats.p99)}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Prompts Section */}
         <div className="bg-gray-800 shadow rounded-lg p-6">
           <h2 className="text-xl font-semibold text-white mb-4">Prompts</h2>
           <div className="flex flex-col gap-4">

@@ -21,6 +21,9 @@ from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from sqlalchemy.orm import Session
 import logging.config
 from bs4 import BeautifulSoup
+import time
+from sqlalchemy import func
+import numpy as np
 
 from app.services.prompt_selector import PromptSelector
 from app.services.model_repository import ModelRepository
@@ -65,6 +68,7 @@ from app.schemas.schemas import (
     ModelsResponse,
     EnhancedPromptResponse
 )
+from app.models import HistoryEntry
 
 # Load environment variables
 load_dotenv()
@@ -186,6 +190,8 @@ def parse_html_content(text: str) -> str:
 async def generate_visualization(request: GenerateRequest, db: Session = Depends(get_db)) -> HTMLResponse:
     """Generate a 3D visualization based on the topic."""
     try:
+        start_time = time.time()
+        
         logger.info("Starting visualization generation", extra={
             "action": "generate_visualization",
             "has_config": bool(request.config)
@@ -370,6 +376,9 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             interactive_features=prompt_entry["interactive_features"]
         )
 
+        # Calculate generation time
+        generation_time = time.time() - start_time
+
         # Then create the history entry with the prompt_id and visualization details
         history_entry = {
             "id": str(datetime.now().timestamp()),
@@ -385,6 +394,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             "intro_narration_texts": json.dumps(request.config.intro_narration_texts) if request.config else None,
             "supporting_narration_texts": json.dumps(request.config.supporting_narration_texts) if request.config else None,
             "scene_description": request.config.scene_description if request.config else None,
+            "generation_time": generation_time,
             "created_at": datetime.now()
         }
         create_history_entry(db, history_entry)
@@ -1001,6 +1011,42 @@ async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)
             "error_type": type(e).__name__
         })
         logger.exception("Full traceback:")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/generation-stats", response_model=dict)
+async def get_generation_stats(db: Session = Depends(get_db)) -> dict:
+    """Get statistics about visualization generation times."""
+    try:
+        # Get all generation times
+        generation_times = db.query(HistoryEntry.generation_time).filter(
+            HistoryEntry.generation_time.isnot(None)
+        ).all()
+        
+        if not generation_times:
+            return {
+                "mean": 0,
+                "median": 0,
+                "p95": 0,
+                "p99": 0,
+                "total_generations": 0
+            }
+        
+        # Convert to numpy array for calculations
+        times = np.array([t[0] for t in generation_times])
+        
+        return {
+            "mean": float(np.mean(times)),
+            "median": float(np.median(times)),
+            "p95": float(np.percentile(times, 95)),
+            "p99": float(np.percentile(times, 99)),
+            "total_generations": len(times)
+        }
+    except Exception as e:
+        logger.error("Error getting generation stats", extra={
+            "action": "get_generation_stats",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("startup")

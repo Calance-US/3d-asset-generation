@@ -52,5 +52,6 @@ class HistoryEntry(Base):
     intro_narration_texts = Column(Text, nullable=True)
     supporting_narration_texts = Column(Text, nullable=True)
     scene_description = Column(Text, nullable=True)
+    generation_time = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     prompt = relationship("Prompt") 
