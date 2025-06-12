@@ -1,0 +1,224 @@
+# Project Structure and Key Responsibilities
+
+This project is a 3D educational visualization platform with a React frontend and FastAPI backend. The application allows users to generate, save, and interact with 3D visualizations for educational purposes.
+
+## Key Technologies
+
+### Backend Technologies
+- **FastAPI (0.104.1)**: Modern, fast web framework for building APIs
+- **SQLAlchemy (2.0.23)**: SQL toolkit and ORM for database operations
+- **Alembic (1.13.1)**: Database migration tool
+- **AI/ML Libraries**:
+  - OpenAI API (>=1.6.1): For AI-powered visualization generation
+  - Google Generative AI (0.3.1): Alternative AI model integration
+  - Sentence Transformers (2.2.2): For text embeddings and similarity search
+  - FAISS (1.7.4): Efficient similarity search and clustering
+- **Data Processing**:
+  - NumPy (1.24.3): Numerical computing
+  - BeautifulSoup4 (4.12.2): HTML parsing
+- **Infrastructure**:
+  - Redis (5.0.1): Caching and session management
+  - Boto3 (1.28.64): AWS service integration
+  - aiohttp (3.9.1): Async HTTP client/server
+- **Configuration & Logging**:
+  - python-dotenv (1.0.0): Environment variable management
+  - pydantic-settings (2.1.0): Settings management
+  - python-json-logger (2.0.7): JSON-formatted logging
+
+### Frontend Technologies
+- **Core Framework**:
+  - React (18.2.0): UI library
+  - React Router (7.6.1): Client-side routing
+- **UI Components**:
+  - Material-UI (@mui/material 7.1.1): Component library
+  - Headless UI (@headlessui/react 2.2.4): Unstyled, accessible components
+  - Heroicons (@heroicons/react 2.2.0): Icon set
+- **Styling**:
+  - Tailwind CSS (3.4.1): Utility-first CSS framework
+  - Emotion (@emotion/react, @emotion/styled): CSS-in-JS solution
+- **Content Editing**:
+  - React Markdown Editor Lite (1.3.4): Markdown editing
+  - markdown-it (14.1.0): Markdown parsing
+- **User Experience**:
+  - React Toastify (11.0.5): Toast notifications
+- **Development Tools**:
+  - Testing: Jest, React Testing Library
+  - Build: React Scripts
+  - PostCSS, Autoprefixer: CSS processing
+
+## Frontend Structure
+
+### 1. `frontend/src/components/Generator.jsx`
+
+- **Role:** Main component for generating and managing 3D visualizations
+- **Key Responsibilities:**
+  - Handles user input for visualization generation
+  - Manages visualization configuration (components, materials, lights)
+  - Provides UI for:
+    - Subject and topic selection
+    - Configuration customization
+    - History management
+    - Library integration
+  - Implements toast notifications for user feedback
+  - Manages fullscreen visualization mode
+
+### 2. `frontend/src/components/Admin.jsx`
+
+- **Role:** Administrative interface for managing prompts and configurations
+- **Key Features:**
+  - Prompt template management
+  - Configuration settings
+  - System monitoring
+
+### 3. `frontend/src/components/PromptConfig.jsx`
+
+- **Role:** Manages prompt configuration and customization
+- **Key Features:**
+  - Prompt template editing
+  - Configuration parameter adjustment
+  - Template validation
+
+### 4. `frontend/src/lib/utils.js`
+
+- **Role:** Utility functions for frontend operations
+- **Key Features:**
+  - Helper functions
+  - Common utilities
+  - Data formatting
+
+## Backend Structure
+
+### 1. `backend/main.py`
+
+- **Role:** Main FastAPI application entry point
+- **Key Responsibilities:**
+  - API route definitions
+  - Middleware configuration (CORS, static files)
+  - Service initialization
+  - Database connection management
+  - Error handling and logging
+
+### 2. `backend/app/models.py`
+
+- **Role:** SQLAlchemy database models
+- **Key Models:**
+  - `Prompt`: Stores prompt templates and configurations
+  - `Tag`: Manages categorization tags
+  - `HistoryEntry`: Tracks visualization generation history
+  - `Visualization`: Stores saved visualizations
+  - Association tables for many-to-many relationships
+
+### 3. `backend/app/services/`
+
+- **Role:** Core business logic services
+- **Key Services:**
+  - `prompt_selector.py`: Manages prompt selection and embedding
+  - `model_repository.py`: Handles model availability and selection
+  - `prompt_generator.py`: Generates prompts for visualization
+
+### 4. `backend/app/api/endpoints/`
+
+- **Role:** API endpoint implementations
+- **Key Endpoints:**
+  - `visualizations.py`: Handles visualization CRUD operations
+
+### 5. `backend/app/database/`
+
+- **Role:** Database configuration and utilities
+- **Key Components:**
+  - `database.py`: Database connection and session management
+  - `db_config.py`: Database configuration settings
+
+### 6. `backend/app/migrations/`
+
+- **Role:** Database migration management
+- **Key Files:**
+  - `versions/`: Contains Alembic migration files
+    - `74c94aab2a18_initial_migration.py`: Initial database schema
+    - `add_string_id_to_history.py`: History table ID modification
+    - `add_visualization_tags.py`: Visualization tags support
+
+### 7. `backend/app/schemas/`
+
+- **Role:** Pydantic models for request/response validation
+- **Key Files:**
+  - `schemas.py`: Common schema definitions
+  - `visualization.py`: Visualization-specific schemas
+
+### 8. `backend/app/config/`
+
+- **Role:** Application configuration
+- **Key Files:**
+  - `settings.py`: Environment and application settings
+  - `logging_config.py`: Logging configuration
+
+### 9. `backend/app/prompts/`
+
+- **Role:** Prompt template management
+- **Key Files:**
+  - `template.json`: Prompt template configuration
+  - `template.prompt.txt`: Base prompt template
+  - `template.sample.json`: Sample prompt data
+  - `embeddings/topics.npy`: Topic embeddings
+
+### 10. `backend/app/data/`
+
+- **Role:** Data storage and management
+- **Key Files:**
+  - `costs.json`: Cost tracking data
+  - `history.json`: Historical data
+
+## Key Features
+
+1. **Visualization Generation**
+   - Dynamic 3D scene creation
+   - Component customization
+   - Material and lighting configuration
+   - Animation and interaction support
+
+2. **History Management**
+   - Generation history tracking
+   - Entry retrieval and deletion
+   - Configuration persistence
+
+3. **Library Integration**
+   - Save visualizations to library
+   - Tag-based organization
+   - Search and retrieval
+
+4. **User Interface**
+   - Responsive design
+   - Interactive controls
+   - Toast notifications
+   - Fullscreen mode
+
+5. **Backend Services**
+   - RESTful API
+   - Database management
+   - Prompt generation
+   - Model selection
+
+## Development Workflow
+
+1. **Frontend Development**
+   - React components in `frontend/src/components/`
+   - State management with React hooks
+   - API integration with backend services
+   - Tailwind CSS for styling
+
+2. **Backend Development**
+   - FastAPI routes in `backend/app/api/endpoints/`
+   - Database models in `backend/app/models.py`
+   - Business logic in `backend/app/services/`
+   - Configuration in `backend/app/config/`
+
+3. **Database Management**
+   - Migrations in `backend/app/migrations/versions/`
+   - Schema updates through Alembic
+   - Data models in SQLAlchemy
+
+4. **Configuration**
+   - Environment variables in `.env`
+   - Application settings in `backend/app/config/`
+   - Logging configuration in `backend/app/config/logging_config.py`
+   - Frontend configuration in `frontend/vite.config.js` and `tailwind.config.js` 

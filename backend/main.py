@@ -44,7 +44,7 @@ from app.database.database import (
     import_prompts,
     migrate_from_json
 )
-from app.migrations.add_category_and_tags import run_migration
+# from app.migrations.add_category_and_tags import run_migration
 from app.services.prompt_generator import PromptGenerator
 from app.config.logging_config import logger
 from app.schemas.schemas import (
@@ -68,7 +68,8 @@ from app.schemas.schemas import (
     ModelsResponse,
     EnhancedPromptResponse
 )
-from app.models import HistoryEntry
+from app.models import HistoryEntry, Visualization, Tag
+from app.api.endpoints import visualizations
 
 # Load environment variables
 load_dotenv()
@@ -124,6 +125,126 @@ else:
         "provider": "gemini",
         "action": "init_provider"
     })
+
+# Include routers
+app.include_router(visualizations.router, prefix="/api/visualizations", tags=["visualizations"])
+
+# Add visualization endpoints
+class VisualizationCreate(BaseModel):
+    topic: str
+    subject: str
+    html_content: str
+    config: Dict[str, Any]
+
+class VisualizationResponse(BaseModel):
+    id: int
+    topic: str
+    subject: str
+    html_content: str
+    config: Dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+@app.post("/api/visualizations/save", response_model=VisualizationResponse)
+async def save_visualization(
+    visualization: VisualizationCreate,
+    db: Session = Depends(get_db)
+) -> VisualizationResponse:
+    """Save a visualization to the library."""
+    try:
+        # Generate embedding for the visualization
+        embedding = prompt_selector.generate_embedding(visualization.topic)
+
+        # Create new visualization
+        db_visualization = Visualization(
+            topic=visualization.topic,
+            subject=visualization.subject,
+            html_content=visualization.html_content,
+            config=visualization.config,
+            embedding=embedding,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+
+        db.add(db_visualization)
+        db.commit()
+        db.refresh(db_visualization)
+
+        return VisualizationResponse(
+            id=db_visualization.id,
+            topic=db_visualization.topic,
+            subject=db_visualization.subject,
+            html_content=db_visualization.html_content,
+            config=db_visualization.config,
+            created_at=db_visualization.created_at,
+            updated_at=db_visualization.updated_at
+        )
+
+    except Exception as e:
+        logger.error("Error saving visualization", extra={
+            "action": "save_visualization",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/visualizations", response_model=List[VisualizationResponse])
+async def get_visualizations(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+) -> List[VisualizationResponse]:
+    """Get all visualizations."""
+    try:
+        visualizations = db.query(Visualization).offset(skip).limit(limit).all()
+        return [
+            VisualizationResponse(
+                id=v.id,
+                topic=v.topic,
+                subject=v.subject,
+                html_content=v.html_content,
+                config=v.config,
+                created_at=v.created_at,
+                updated_at=v.updated_at
+            )
+            for v in visualizations
+        ]
+    except Exception as e:
+        logger.error("Error getting visualizations", extra={
+            "action": "get_visualizations",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/visualizations/{visualization_id}", response_model=VisualizationResponse)
+async def get_visualization(
+    visualization_id: int,
+    db: Session = Depends(get_db)
+) -> VisualizationResponse:
+    """Get a specific visualization by ID."""
+    try:
+        visualization = db.query(Visualization).filter(Visualization.id == visualization_id).first()
+        if not visualization:
+            raise HTTPException(status_code=404, detail="Visualization not found")
+
+        return VisualizationResponse(
+            id=visualization.id,
+            topic=visualization.topic,
+            subject=visualization.subject,
+            html_content=visualization.html_content,
+            config=visualization.config,
+            created_at=visualization.created_at,
+            updated_at=visualization.updated_at
+        )
+    except Exception as e:
+        logger.error("Error getting visualization", extra={
+            "action": "get_visualization",
+            "visualization_id": visualization_id,
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
+        raise HTTPException(status_code=500, detail=str(e))
 
 def parse_html_content(text: str) -> str:
     """
@@ -1072,8 +1193,9 @@ async def startup_event():
             logger.info("Running database migrations...", extra={
                 "action": "run_migrations"
             })
-            migrate_from_json()
-            run_migration()  # Run the new migration
+            # migrate_from_json()
+            # run_migration()  # Run the new migration
+            pass
         else:
             logger.info("Skipping database migrations. Set RUN_MIGRATIONS=1 to run migrations.", extra={
                 "action": "skip_migrations"

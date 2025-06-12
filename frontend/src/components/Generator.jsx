@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/20/solid';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export default function Generator() {
   const [prompt, setPrompt] = useState("");
@@ -466,8 +468,49 @@ export default function Generator() {
     }));
   };
 
+  const handleSaveToLibrary = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/visualizations/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          topic: prompt,
+          subject: subject,
+          html_content: html,
+          config: config
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save visualization');
+      }
+
+      toast.success('Visualization saved to library successfully!', {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    } catch (error) {
+      console.error('Error saving visualization:', error);
+      toast.error('Failed to save visualization to library', {
+        position: "top-right",
+        autoClose: 5000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900">
+      <ToastContainer />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-white">3D Concept Visualizer</h1>
@@ -1017,7 +1060,7 @@ export default function Generator() {
                         </div>
 
                         {/* TTS Settings */}
-                        <div>
+                        <div className="space-y-2">
                           <label className="block text-sm font-medium text-gray-300 mb-2">
                             Text-to-Speech Settings
                           </label>
@@ -1163,15 +1206,48 @@ export default function Generator() {
                 <div className="mt-8">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-medium text-white">Generated Visualization</h2>
-                    <button
-                      onClick={handleFullscreen}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-700 rounded-md shadow-sm text-sm font-medium text-gray-300 bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-                      </svg>
-                      Fullscreen
-                    </button>
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={handleSaveToLibrary}
+                        className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <svg
+                          className="w-5 h-5 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                          />
+                        </svg>
+                        Add to Library
+                      </button>
+                      <button
+                        onClick={handleFullscreen}
+                        className="flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                      >
+                        <svg
+                          className="w-5 h-5 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+                          />
+                        </svg>
+                        Fullscreen
+                      </button>
+                    </div>
                   </div>
                   <div className="border border-gray-700 rounded-lg overflow-hidden">
                     <iframe

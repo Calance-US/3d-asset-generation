@@ -11,6 +11,14 @@ prompt_tags = Table(
     Column('tag_id', Integer, ForeignKey('tags.id'))
 )
 
+# Association table for many-to-many relationship between visualizations and tags
+visualization_tags = Table(
+    'visualization_tags',
+    Base.metadata,
+    Column('visualization_id', Integer, ForeignKey('visualizations.id')),
+    Column('tag_id', Integer, ForeignKey('tags.id'))
+)
+
 class Prompt(Base):
     __tablename__ = "prompts"
 
@@ -35,11 +43,12 @@ class Tag(Base):
     name = Column(String, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     prompts = relationship("Prompt", secondary=prompt_tags, back_populates="tags")
+    visualizations = relationship("Visualization", secondary=visualization_tags, back_populates="tags")
 
 class HistoryEntry(Base):
     __tablename__ = "history"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, index=True)
     prompt_id = Column(Integer, ForeignKey("prompts.id"))
     user_query = Column(Text)
     response = Column(Text)
@@ -57,3 +66,16 @@ class HistoryEntry(Base):
     
     # Relationships
     prompt = relationship("Prompt")
+
+class Visualization(Base):
+    __tablename__ = "visualizations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    topic = Column(String, index=True)
+    subject = Column(String, index=True)
+    html_content = Column(Text)
+    config = Column(JSON)
+    embedding = Column(JSON)  # Store embeddings as JSON for similarity search
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    tags = relationship("Tag", secondary=visualization_tags, back_populates="visualizations")

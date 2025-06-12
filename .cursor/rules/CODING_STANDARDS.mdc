@@ -1,0 +1,52 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Rules for enforcing coding standards
+
+[language.python]
+version = "3.11"
+
+# Linting rules
+lint:
+  # PEP8 enforcement (using pycodestyle or flake8)
+  pep8: true
+
+  # Import sorting enforcement (e.g., isort)
+  sort-imports: true
+
+  # Docstring style enforcement - Google style
+  docstring-style:
+    style: google
+    required: true
+
+  # FastAPI-specific rules (some semantic checks)
+  fastapi:
+    require-type-annotations: true
+    require-response-models: true
+    use-async-def: true
+
+  # Pydantic v2-specific rules
+  pydantic:
+    version: 2
+    require-model-config: true
+    require-validators: false
+    disallow-orm_mode-without-config: true
+
+  # SQLAlchemy-specific rules
+  sqlalchemy:
+    require-explicit-declarations: true
+    enforce-relationship-use: true
+
+# Additional style rules
+
+[style]
+max-line-length = 79
+indent-size = 4
+use-tabs = false
+
+[imports]
+sort-order = ["stdlib", "thirdparty", "local"]
+case-sensitive = false
+separate-by-type = true
