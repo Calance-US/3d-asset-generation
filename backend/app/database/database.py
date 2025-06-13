@@ -1,12 +1,11 @@
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 from datetime import datetime
 import json
 from pathlib import Path
 from typing import Dict, Optional, List
 import logging
 from .db_config import SessionLocal, Base, engine
+from app.config.settings import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,21 +16,6 @@ from ..models import Prompt, Tag, prompt_tags, HistoryEntry
 
 # Define project root directory
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-
-# Create SQLAlchemy engine
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{PROJECT_ROOT}/app.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-
-# Create SessionLocal class
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create Base class
-Base = declarative_base()
-
-# Create all tables
-Base.metadata.create_all(bind=engine)
 
 # Initialize prompt selector
 prompt_selector = None

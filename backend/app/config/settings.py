@@ -3,25 +3,34 @@ from typing import Dict, List, Optional
 import os
 from dotenv import load_dotenv
 from functools import lru_cache
+from pathlib import Path
 
 load_dotenv()
 
 class Settings(BaseSettings):
+    # Database Settings
+    DATABASE_URL: str = "sqlite:///./app.db"
+    DATABASE_ECHO: bool = False
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 10
+    DATABASE_POOL_TIMEOUT: int = 30
+    DATABASE_POOL_RECYCLE: int = 1800
+
     # API Keys
     OPENAI_API_KEY: Optional[str] = None
-    GOOGLE_API_KEY: str | None = None
+    GOOGLE_API_KEY: Optional[str] = None
     
     # Migration Settings
     RUN_MIGRATIONS: bool = False
     
     # Model Repository Settings
-    SKETCHFAB_API_KEY: str = os.getenv("SKETCHFAB_API_KEY", "")
-    S3_BUCKET_NAME: str = os.getenv("S3_BUCKET_NAME", "")
-    S3_ACCESS_KEY: str = os.getenv("S3_ACCESS_KEY", "")
-    S3_SECRET_KEY: str = os.getenv("S3_SECRET_KEY", "")
+    SKETCHFAB_API_KEY: str = ""
+    S3_BUCKET_NAME: str = ""
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
     
     # Redis Settings
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+    REDIS_URL: str = "redis://localhost:6379"
     
     # Model Settings
     OPENAI_MODEL: str = "gpt-4.1-mini"
@@ -78,6 +87,10 @@ class Settings(BaseSettings):
     </body>
     </html>
     """
+
+    # Vector store settings
+    VECTOR_STORE_PATH: str = str(Path(__file__).parent.parent.parent / "data" / "vector_store")
+    VECTOR_STORE_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2 model
 
     class Config:
         env_file = ".env"

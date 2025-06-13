@@ -1,0 +1,99 @@
+---
+description: When the user asks to create a migration or when a migration is required
+globs: 
+alwaysApply: false
+---
+# Database Migrations Guide
+
+## Migration Structure
+
+The database migrations are managed using Alembic and are located in:
+- [migrations/](mdc:backend/migrations) - Main migrations directory
+  - [versions/](mdc:backend/migrations/versions) - Migration version files
+  - [env.py](mdc:backend/migrations/env.py) - Migration environment configuration
+
+## Running Migrations
+
+1. Create a new migration:
+```bash
+cd backend
+uv run alembic revision --autogenerate -m "description of changes"
+```
+
+2. Apply migrations:
+```bash
+cd backend
+uv run alembic upgrade head
+```
+
+3. Rollback migrations:
+```bash
+cd backend
+uv run alembic downgrade -1  # Rollback one version
+uv run alembic downgrade base  # Rollback all migrations
+```
+
+## Migration Best Practices
+
+1. Always review auto-generated migrations before applying them
+2. Test migrations in development before applying to production
+3. Keep migrations atomic and focused on specific changes
+4. Include both upgrade and downgrade paths
+5. Document complex migrations with comments
+
+## Database Models
+
+The database models are defined in:
+- [models.py](mdc:backend/app/db/models.py) - SQLAlchemy model definitions
+
+## Common Migration Tasks
+
+1. Adding a new table:
+```python
+def upgrade():
+    op.create_table(
+        'table_name',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('name', sa.String(), nullable=False),
+        sa.PrimaryKeyConstraint('id')
+    )
+
+def downgrade():
+    op.drop_table('table_name')
+```
+
+2. Adding a column:
+```python
+def upgrade():
+    op.add_column('table_name', sa.Column('new_column', sa.String()))
+
+def downgrade():
+    op.drop_column('table_name', 'new_column')
+```
+
+3. Modifying a column:
+```python
+def upgrade():
+    op.alter_column('table_name', 'column_name',
+                    existing_type=sa.String(),
+                    type_=sa.Integer(),
+                    existing_nullable=True)
+
+def downgrade():
+    op.alter_column('table_name', 'column_name',
+                    existing_type=sa.Integer(),
+                    type_=sa.String(),
+                    existing_nullable=True)
+```
+
+## Troubleshooting
+
+1. If migrations fail:
+   - Check the database connection
+   - Verify the migration history in alembic_version table
+   - Review the migration file for syntax errors
+
+2. If auto-generation fails:
+   - Ensure models are properly imported in env.py
+   - Check for circular dependencies
+   - Verify model definitions match the database schema

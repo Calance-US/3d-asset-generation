@@ -69,7 +69,7 @@ from app.schemas.schemas import (
     EnhancedPromptResponse
 )
 from app.models import HistoryEntry, Visualization, Tag
-from app.api.endpoints import visualizations
+from app.api.api import api_router  # Import the API router
 
 # Load environment variables
 load_dotenv()
@@ -100,6 +100,9 @@ else:
         "action": "mount_static_files"
     })
 
+# Include the API router
+app.include_router(api_router, prefix="/api/v1")
+
 # Initialize services
 prompt_selector = PromptSelector()
 model_repository = ModelRepository()
@@ -125,9 +128,6 @@ else:
         "provider": "gemini",
         "action": "init_provider"
     })
-
-# Include routers
-app.include_router(visualizations.router, prefix="/api/visualizations", tags=["visualizations"])
 
 # Add visualization endpoints
 class VisualizationCreate(BaseModel):
