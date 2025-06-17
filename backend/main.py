@@ -5,7 +5,7 @@ from typing import Literal, Optional, Dict, Any, List, Union, Tuple
 import aiohttp
 from openai import AsyncOpenAI
 import requests
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -66,10 +66,15 @@ from app.schemas.schemas import (
     SuccessResponse,
     HTMLResponse,
     ModelsResponse,
-    EnhancedPromptResponse
+    EnhancedPromptResponse,
+    EnhancementRequest
 )
 from app.models import HistoryEntry, Visualization, Tag
 from app.api.api import api_router  # Import the API router
+from app.services.rag.embedding_service import EmbeddingService
+from app.services.rag.vector_store import get_vector_store
+from app.schemas.visualization import VisualizationResponse
+from app.utils.embedding_utils import create_embedding_text, build_embedding_text_from_config
 
 # Load environment variables
 load_dotenv()
@@ -80,7 +85,7 @@ app = FastAPI()
 # Enable CORS for all origins (adjust for production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -144,6 +149,9 @@ class VisualizationResponse(BaseModel):
     config: Dict[str, Any]
     created_at: datetime
     updated_at: datetime
+
+class RetrieveSimilarResponse(BaseModel):
+    results: List[Dict[str, Any]]
 
 @app.post("/api/visualizations/save", response_model=VisualizationResponse)
 async def save_visualization(
@@ -319,6 +327,45 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
         })
         logger.debug(f"Request config: {json.dumps(request.config.model_dump() if request.config else None, indent=2)}")
 
+        # --- Retrieve similar visualizations for context injection ---
+        vector_store = get_vector_store()
+        # Prepare fields for embedding context
+        if request.config:
+            embedding_input = build_embedding_text_from_config(request.config.model_dump())
+        else:
+            embedding_input = request.topic
+        embedding = EmbeddingService.generate_embedding(embedding_input)
+        similar = await vector_store.get_similar_visualizations(embedding, limit=3)
+        # Build context string from similar visualizations
+        context_blocks = []
+        for item in similar:
+            meta = item['metadata']
+            # Try to fetch full visualization from DB if id is present
+            viz_id = meta.get('id')
+            viz = None
+            if viz_id:
+                viz = db.query(Visualization).filter_by(id=viz_id).first()
+            if viz:
+                context_blocks.append(f"Example Visualization:\nTopic: {viz.topic}\nConfig: {json.dumps(viz.config, indent=2)}\nSummary: {viz.config.get('scene_description', '')}")
+            else:
+                # Fallback: use metadata
+                context_blocks.append(f"Example Visualization:\nConfig: {json.dumps(meta, indent=2)}")
+        context_text = "\n\n".join(context_blocks) if context_blocks else ""
+
+        # --- Logging retrieval quality ---
+        logger.info("Retrieval event", extra={
+            "user_query": request.topic,
+            "embedding_input": embedding_input,
+            "retrieved": [
+                {
+                    "id": item['metadata'].get('id'),
+                    "similarity": item.get('similarity'),
+                    "summary": item['metadata'].get('scene_description', '')
+                }
+                for item in similar
+            ]
+        })
+
         # Generate the prompt using either custom config or basic topic info
         if request.config:
             logger.info("Using provided configuration", extra={
@@ -343,6 +390,10 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                 request.subject,
                 education_level="High School"
             )
+
+        # Inject retrieved context into the prompt
+        if context_text:
+            prompt_content = f"{context_text}\n\n---\n\n{prompt_content}"
 
         # Debug log the generated prompt
         logger.info("Generated Prompt Configuration:")
@@ -650,287 +701,21 @@ async def delete_history_entry(entry_id: str, db: Session = Depends(get_db)) -> 
         })
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.put("/admin/prompts/{prompt_id}", response_model=PromptResponse)
-async def update_prompt_endpoint(
-    prompt_id: int,
-    prompt_data: UpdatePromptRequest,
-    db: Session = Depends(get_db)
-) -> PromptResponse:
-    """Update a prompt in the database."""
+@app.post("/enhance-prompt")
+async def enhance_prompt(request: EnhancementRequest):
     try:
-        update_data = {k: v for k, v in prompt_data.dict().items() if v is not None}
-        if not update_data:
-            raise HTTPException(status_code=400, detail="No valid fields provided for update")
-
-        updated_prompt = update_prompt(db, prompt_id, update_data)
-        if not updated_prompt:
-            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
-
-        prompt_selector.initialize_index()
-
-        return PromptResponse(
-            id=updated_prompt.id,
-            subject=updated_prompt.subject,
-            topic=updated_prompt.topic,
-            content=updated_prompt.content,
-            category=updated_prompt.category,
-            tags=[tag.name for tag in updated_prompt.tags]
+        # Create enhancement prompt using the configuration
+        enhancement_prompt = settings.ENHANCEMENT_PROMPT.format(
+            topic=request.topic,
+            subject=request.subject
         )
 
-    except Exception as e:
-        logger.error("Error updating prompt", extra={
-            "action": "update_prompt",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/admin/prompts", response_model=PromptsResponse)
-async def get_all_prompts(
-    subject: Optional[str] = None,
-    category: Optional[str] = None,
-    tag: Optional[str] = None,
-    search: Optional[str] = None,
-    db: Session = Depends(get_db)
-) -> PromptsResponse:
-    """Get all prompts from the database with optional filtering."""
-    try:
-        prompts = get_prompts(db, subject, category, tag, search)
-        return PromptsResponse(prompts=[
-            PromptResponse(
-                id=prompt.id,
-                subject=prompt.subject,
-                topic=prompt.topic,
-                content=prompt.content,
-                category=prompt.category,
-                tags=[tag.name for tag in prompt.tags]
-            )
-            for prompt in prompts
-        ])
-    except Exception as e:
-        logger.error("Error getting prompts", extra={
-            "action": "get_all_prompts",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/prompts", response_model=PromptResponse)
-async def create_prompt_endpoint(
-    prompt_data: CreatePromptRequest,
-    db: Session = Depends(get_db)
-) -> PromptResponse:
-    """Create a new prompt in the database."""
-    try:
-        new_prompt = create_prompt(
-            db,
-            subject=prompt_data.subject,
-            topic=prompt_data.topic,
-            content=prompt_data.content,
-            category=prompt_data.category,
-            tags=",".join(prompt_data.tags) if prompt_data.tags else ""
-        )
-
-        prompt_selector.initialize_index()
-
-        return PromptResponse(
-            id=new_prompt.id,
-            subject=new_prompt.subject,
-            topic=new_prompt.topic,
-            content=new_prompt.content,
-            category=new_prompt.category,
-            tags=[tag.name for tag in new_prompt.tags]
-        )
-
-    except Exception as e:
-        logger.error("Error creating prompt", extra={
-            "action": "create_prompt",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/admin/prompts/{prompt_id}", response_model=SuccessResponse)
-async def delete_prompt_endpoint(
-    prompt_id: int,
-    db: Session = Depends(get_db)
-) -> SuccessResponse:
-    """Delete a prompt from the database."""
-    try:
-        success = delete_prompt(db, prompt_id)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
-
-        prompt_selector.initialize_index()
-        return SuccessResponse(status="success")
-
-    except Exception as e:
-        logger.error("Error deleting prompt", extra={
-            "action": "delete_prompt",
-            "prompt_id": prompt_id,
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/prompts/{prompt_id}/duplicate", response_model=PromptResponse)
-async def duplicate_prompt_endpoint(
-    prompt_id: int,
-    db: Session = Depends(get_db)
-) -> PromptResponse:
-    """Duplicate a prompt."""
-    try:
-        duplicated = duplicate_prompt(db, prompt_id)
-        if not duplicated:
-            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
-
-        return PromptResponse(
-            id=duplicated.id,
-            subject=duplicated.subject,
-            topic=duplicated.topic,
-            content=duplicated.content,
-            category=duplicated.category,
-            tags=[tag.name for tag in duplicated.tags]
-        )
-    except Exception as e:
-        logger.error("Error duplicating prompt", extra={
-            "action": "duplicate_prompt",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/prompts/batch-delete", response_model=SuccessResponse)
-async def batch_delete_prompts_endpoint(
-    request: BatchDeleteRequest,
-    db: Session = Depends(get_db)
-) -> SuccessResponse:
-    """Delete multiple prompts."""
-    try:
-        success = batch_delete_prompts(db, request.prompt_ids)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to delete prompts")
-
-        prompt_selector.initialize_index()
-        return SuccessResponse(status="success")
-    except Exception as e:
-        logger.error("Error deleting prompts", extra={
-            "action": "batch_delete_prompts",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/admin/prompts/export", response_model=PromptsResponse)
-async def export_prompts_endpoint(db: Session = Depends(get_db)) -> PromptsResponse:
-    """Export all prompts."""
-    try:
-        prompts_data = export_prompts(db)
-        return PromptsResponse(prompts=[
-            PromptResponse(
-                id=prompt["id"],
-                subject=prompt["subject"],
-                topic=prompt["topic"],
-                content=prompt["content"],
-                category=prompt["category"],
-                tags=prompt["tags"]
-            )
-            for prompt in prompts_data
-        ])
-    except Exception as e:
-        logger.error("Error exporting prompts", extra={
-            "action": "export_prompts",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/admin/prompts/import", response_model=SuccessResponse)
-async def import_prompts_endpoint(
-    request: ImportPromptsRequest,
-    db: Session = Depends(get_db)
-) -> SuccessResponse:
-    """Import prompts."""
-    try:
-        success = import_prompts(db, request.prompts)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to import prompts")
-        return SuccessResponse(status="success")
-    except Exception as e:
-        logger.error("Error importing prompts", extra={
-            "action": "import_prompts",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/enhance-prompt", response_model=EnhancedPromptResponse)
-async def enhance_prompt(request: GenerateRequest, db: Session = Depends(get_db)) -> EnhancedPromptResponse:
-    """Enhance a basic prompt into a detailed configuration using LLM."""
-    try:
         logger.info("Enhancing prompt", extra={
             "action": "enhance_prompt",
             "topic": request.topic,
             "subject": request.subject,
             "provider": request.provider
         })
-
-        # Create a prompt for the LLM to enhance the concept
-        enhancement_prompt = f"""Given the following concept prompt: "{request.topic}" in the subject of {request.subject},
-        generate a detailed configuration for a 3D visualization. Return the response as a JSON object with the following structure.
-        IMPORTANT: Keep all text fields concise (max 200 characters) to avoid truncation.
-        {{
-            "topic_name": "A short, concise name for the topic (max 20 chars)",
-            "key_concepts": "Comma separated main concepts to be visualized (max 200 chars)",
-            "education_level": "choose between Elementary, Middle School, High School or College",
-            "learning_objectives": "What students will learn (max 200 chars)",
-            "interactive_features": "What users can interact with in the scene (max 200 chars)",
-            "scene_description": "A detailed description of the 3D scene with realistic details(max 1000 chars)",
-            "components": [
-                {{
-                    "component_name": "Name of a 3D component required in the 3D scene (max 50 chars)",
-                    "component_description": "Description of what this component represents in the 3D scene (max 100 chars)"
-                }}
-            ],
-            "materials": [
-                {{
-                    "material_name": "Name of the material (based on the components)",
-                    "material_type": "Type of material (choose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial)",
-                    "color": "#RRGGBB",
-                    "metalness": 0.5,
-                    "roughness": 0.5,
-                    "emissive": "#RRGGBB",
-                    "emissiveIntensity": 0.5
-                }}
-            ],
-            "lights": [
-                {{
-                    "light_type": "Type of light (max 50 chars)",
-                    "light_class": "THREE.LightClass [choose between DirectionalLight, AmbientLight, HemisphereLight]",
-                    "light_color": "#RRGGBB",
-                    "intensity": 0.5
-                }}
-            ],
-            "interactive_description": "How users can interact with the visualization (max 200 chars)",
-            "animated_elements": "What components should be animated and how (max 200 chars)",
-            "intro_narration_texts": [
-                "Concise introductory narration texts about the topic to be played at the start (each max 500 chars)"
-            ],
-            "supporting_narration_texts": [
-                "Short texts to be played during user interactions explaining controls or feedback (each max 100 chars)"
-            ]
-        }}
-
-        Make the response educational, scientifically accurate, and suitable for {request.subject} education.
-        Focus on making the visualization clear and intuitive.
-        IMPORTANT:
-        1. Return ONLY the JSON object, no other text or explanation.
-        2. Keep all text fields concise to avoid truncation.
-        3. Ensure all JSON fields are properly closed.
-        4. Do not include any markdown formatting.
-        """
-
-        logger.debug(f"Enhancement prompt created: {enhancement_prompt}")
 
         if request.provider == "openai":
             if not client:
@@ -1170,6 +955,40 @@ async def get_generation_stats(db: Session = Depends(get_db)) -> dict:
         })
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/retrieve-similar", response_model=RetrieveSimilarResponse)
+async def retrieve_similar_visualizations(
+    request: GenerateRequest,
+    db: Session = Depends(get_db),
+    top_k: int = Query(5, description="Number of similar results to return")
+) -> RetrieveSimilarResponse:
+    """Retrieve similar visualizations/snippets based on user prompt and config."""
+    try:
+        # Prepare embedding input using the same utility as /generate
+        if request.config:
+            embedding_input = build_embedding_text_from_config(request.config.model_dump())
+        else:
+            embedding_input = request.topic
+        embedding = EmbeddingService.generate_embedding(embedding_input)
+        vector_store = get_vector_store()
+        similar = await vector_store.get_similar_visualizations(embedding, limit=top_k)
+        # Optionally, add similarity scores if available
+        results = []
+        for item in similar:
+            meta = item.get('metadata', {})
+            score = item.get('score') if 'score' in item else None
+            results.append({
+                'metadata': meta,
+                'score': score
+            })
+        return RetrieveSimilarResponse(results=results)
+    except Exception as e:
+        logger.error("Error retrieving similar visualizations", extra={
+            "action": "retrieve_similar_visualizations",
+            "error": str(e),
+            "error_type": type(e).__name__
+        })
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("startup")
 async def startup_event():
     """Run migrations only if RUN_MIGRATIONS setting is enabled."""
@@ -1207,6 +1026,26 @@ async def startup_event():
         logger.info("Prompt selector initialized", extra={
             "action": "init_prompt_selector"
         })
+
+        # Initialize vector store
+        vector_store = get_vector_store()
+        try:
+            vector_store.load(settings.VECTOR_STORE_PATH)
+            logger.info("Vector store loaded successfully", extra={
+                "action": "init_vector_store",
+                "path": settings.VECTOR_STORE_PATH,
+                "num_vectors": len(vector_store.visualizations) if vector_store.visualizations else 0
+            })
+        except FileNotFoundError:
+            logger.info("No existing vector store found, starting fresh", extra={
+                "action": "init_vector_store",
+                "path": settings.VECTOR_STORE_PATH
+            })
+        except Exception as e:
+            logger.error("Error loading vector store", extra={
+                "action": "init_vector_store",
+                "error": str(e)
+            })
 
     except Exception as e:
         logger.error("Error during startup", extra={

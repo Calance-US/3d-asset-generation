@@ -4,6 +4,10 @@ import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 import { toast } from 'react-toastify';
+import FAISSDashboard from './admin/FAISSDashboard';
+import { Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 // Initialize markdown parser
 const mdParser = new MarkdownIt();
@@ -85,19 +89,44 @@ function Admin() {
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editingPrompt, setEditingPrompt] = useState(null);
-  const [editForm, setEditForm] = useState({
-    topic: "",
-    content: "",
-    subject: "",
-    tags: ""
-  });
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(null);
   const [goldStandards, setGoldStandards] = useState([]);
   const [goldStandardsLoading, setGoldStandardsLoading] = useState(true);
   const [goldStandardsError, setGoldStandardsError] = useState(null);
+  const [multiUploadFiles, setMultiUploadFiles] = useState([]);
+  const [multiUploadId, setMultiUploadId] = useState(null);
+  const [multiUploadStatus, setMultiUploadStatus] = useState(null);
+  const [multiUploadPolling, setMultiUploadPolling] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [editingGoldStandard, setEditingGoldStandard] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    id: '',
+    snippet_hash: '',
+    topic: '',
+    subject: '',
+    key_concepts: '',
+    education_level: '',
+    learning_objectives: '',
+    html: '',
+    type: '',
+    status: '',
+    validation_status: '',
+    snippet_type: '',
+    html_snippet: '',
+    summary: '',
+    embedding_text: '',
+    filename: '',
+    upload_id: '',
+    llm_version: '',
+    validation_errors: [],
+    retry_count: 0,
+    tags: []
+  });
   const [newGoldStandard, setNewGoldStandard] = useState({
     html: '',
     config: {},
@@ -125,7 +154,7 @@ function Admin() {
   const fetchStats = async () => {
     try {
       setStatsLoading(true);
-      const response = await fetch('http://localhost:8000/admin/generation-stats');
+      const response = await fetch('http://localhost:8000/api/v1/admin/faiss-stats');
       if (!response.ok) {
         throw new Error('Failed to fetch generation stats');
       }
@@ -150,7 +179,7 @@ function Admin() {
   const loadPrompts = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/admin/prompts");
+      const response = await fetch("http://localhost:8000/api/v1/admin/prompts");
       if (!response.ok) {
         throw new Error(`Failed to load prompts: ${response.statusText}`);
       }
@@ -180,91 +209,111 @@ function Admin() {
     }
   };
 
-  const handleEdit = (promptId) => {
-    const prompt = prompts.find(p => p.id === promptId);
-    if (prompt) {
-      setEditingPrompt(prompt);
-      setEditForm({
-        topic: prompt.topic,
-        content: prompt.content,
-        subject: prompt.subject,
-        tags: prompt.tags.join(", ")
-      });
-    }
+  const handleEditGoldStandard = (standard) => {
+    setEditingGoldStandard(standard);
+    setEditForm({
+      id: standard.metadata.id || '',
+      snippet_hash: standard.metadata.snippet_hash || '',
+      topic: standard.metadata.topic || '',
+      subject: standard.metadata.subject || '',
+      key_concepts: standard.metadata.key_concepts || '',
+      education_level: standard.metadata.education_level || '',
+      learning_objectives: standard.metadata.learning_objectives || '',
+      html: standard.html || '',
+      type: standard.type || '',
+      status: standard.status || '',
+      validation_status: standard.metadata.validation_status || '',
+      snippet_type: standard.metadata.snippet_type || '',
+      html_snippet: standard.metadata.html_snippet || '',
+      summary: standard.metadata.summary || '',
+      embedding_text: standard.metadata.embedding_text || '',
+      filename: standard.metadata.filename || '',
+      upload_id: standard.metadata.upload_id || '',
+      llm_version: standard.metadata.llm_version || '',
+      validation_errors: standard.metadata.validation_errors || [],
+      retry_count: standard.metadata.retry_count || 0,
+      tags: standard.metadata.tags || []
+    });
+    setEditDialogOpen(true);
   };
 
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
+  const handleEditSubmit = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/admin/prompts/${editingPrompt.id}`, {
-        method: "PUT",
+      const response = await fetch(`http://localhost:8000/api/v1/gold-standards/${editingGoldStandard.id}`, {
+        method: 'PUT',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          topic: editForm.topic,
-          content: editForm.content,
-          subject: editForm.subject,
-          tags: editForm.tags.split(",").map(tag => tag.trim()).filter(tag => tag)
+          html: editForm.html,
+          metadata: {
+            id: editForm.id,
+            snippet_hash: editForm.snippet_hash,
+            topic: editForm.topic,
+            subject: editForm.subject,
+            key_concepts: editForm.key_concepts,
+            education_level: editForm.education_level,
+            learning_objectives: editForm.learning_objectives,
+            validation_status: editForm.validation_status,
+            snippet_type: editForm.snippet_type,
+            html_snippet: editForm.html_snippet,
+            summary: editForm.summary,
+            embedding_text: editForm.embedding_text,
+            filename: editForm.filename,
+            upload_id: editForm.upload_id,
+            llm_version: editForm.llm_version,
+            validation_errors: editForm.validation_errors,
+            retry_count: editForm.retry_count,
+            tags: editForm.tags
+          }
         }),
       });
 
-      if (response.ok) {
-        const updatedPrompt = await response.json();
-        setPrompts(prompts.map(p => p.id === editingPrompt.id ? updatedPrompt : p));
-        setEditingPrompt(null);
-      } else {
-        setError("Failed to update prompt");
-      }
-    } catch (err) {
-      setError("Error connecting to server");
-    }
-  };
-
-  const handleDelete = async (index) => {
-    if (!window.confirm('Are you sure you want to delete this gold standard?')) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`http://localhost:8000/api/v1/gold-standards/${index}`, {
-        method: 'DELETE'
-      });
-      
       if (!response.ok) {
-        throw new Error('Failed to delete gold standard');
+        throw new Error('Failed to update gold standard');
       }
-      
-      // Refresh the list after deletion
+
+      toast.success('Gold standard updated successfully');
+      setEditDialogOpen(false);
       fetchGoldStandards();
-      setError(null);
     } catch (err) {
-      setError('Error deleting gold standard: ' + err.message);
+      toast.error('Failed to update gold standard: ' + err.message);
     }
   };
 
-  const truncateContent = (content) => {
-    // Remove markdown syntax for preview
-    const plainText = content.replace(/[#*`_~[]]/g, '');
-    return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
   };
 
   const handleAddGoldStandard = async () => {
     try {
+      const formData = new FormData();
+      const htmlBlob = new Blob([newGoldStandard.html], { type: 'text/html' });
+      formData.append('files', htmlBlob, 'visualization.html');
+
       const response = await fetch('http://localhost:8000/api/v1/gold-standards', {
         method: 'POST',
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newGoldStandard)
+        body: formData,
       });
 
       if (!response.ok) {
         throw new Error('Failed to add gold standard');
       }
 
-      toast.success('Gold standard added successfully');
-      fetchGoldStandards();
+      const data = await response.json();
+      if (data.upload_id) {
+        setMultiUploadId(data.upload_id);
+        setMultiUploadPolling(true);
+        toast.info('Upload started. Tracking status...');
+      } else {
+        toast.error('Failed to start upload.');
+      }
+
       setNewGoldStandard({
         html: '',
         config: {},
@@ -403,6 +452,90 @@ function Admin() {
     }
   };
 
+  // Multi-file upload handlers
+  const handleMultiFileChange = (e) => {
+    setMultiUploadFiles([...e.target.files]);
+  };
+
+  const handleMultiUpload = async () => {
+    if (!multiUploadFiles.length) {
+      toast.error('Please select at least one HTML file.');
+      return;
+    }
+    const formData = new FormData();
+    multiUploadFiles.forEach(file => formData.append('files', file));
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/gold-standards/', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      if (data.upload_id) {
+        setMultiUploadId(data.upload_id);
+        setMultiUploadStatus('processing');
+        setMultiUploadPolling(true);
+        toast.info('Upload started. Tracking status...');
+      } else {
+        toast.error('Failed to start upload.');
+      }
+    } catch (err) {
+      toast.error('Error uploading files.');
+    }
+  };
+
+  useEffect(() => {
+    if (!multiUploadId || !multiUploadPolling) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/v1/gold-standards/status/${multiUploadId}`);
+        const statusData = await res.json();
+        setMultiUploadStatus(statusData);
+        if (statusData.status === 'completed' || statusData.status === 'error') {
+          setMultiUploadPolling(false);
+          clearInterval(interval);
+          if (statusData.status === 'completed') {
+            toast.success('Gold standards upload completed!');
+          } else {
+            toast.error('Gold standards upload failed.');
+          }
+        }
+      } catch (err) {
+        setMultiUploadPolling(false);
+        clearInterval(interval);
+        toast.error('Error polling upload status.');
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [multiUploadId, multiUploadPolling]);
+
+  const handleDelete = async (index) => {
+    if (!window.confirm('Are you sure you want to delete this gold standard?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/gold-standards/${index}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete gold standard');
+      }
+      
+      // Refresh the list after deletion
+      fetchGoldStandards();
+      setError(null);
+    } catch (err) {
+      setError('Error deleting gold standard: ' + err.message);
+    }
+  };
+
+  const truncateContent = (content) => {
+    // Remove markdown syntax for preview
+    const plainText = content.replace(/[#*`_~[]]/g, '');
+    return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
+  };
+
   if (loading || statsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -420,401 +553,618 @@ function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-8">
-      <style>{markdownStyles}</style>
+    <div className="min-h-screen bg-gray-900 text-white p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
-          <button
-            onClick={() => navigate("/")}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Back to Generator
-          </button>
-        </div>
+        <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+        
+        <Tabs 
+          value={activeTab} 
+          onChange={(e, newValue) => setActiveTab(newValue)} 
+          className="mb-6"
+          sx={{
+            '& .MuiTab-root': {
+              color: 'rgba(255, 255, 255, 0.7)',
+              '&.Mui-selected': {
+                color: '#60a5fa',
+              },
+            },
+            '& .MuiTabs-indicator': {
+              backgroundColor: '#60a5fa',
+            },
+          }}
+        >
+          <Tab label="Gold Standards" />
+          <Tab label="Prompts" />
+          <Tab label="FAISS Dashboard" />
+        </Tabs>
 
-        {/* Generation Statistics Section */}
-        <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-white">Visualization Generation Statistics</h2>
-            <button
-              onClick={fetchStats}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-            >
-              Refresh Statistics
-            </button>
-          </div>
-          {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-300">Mean Generation Time</h3>
-                <p className="text-2xl font-bold text-white">{formatTime(stats.mean)}</p>
-              </div>
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-300">Median Generation Time</h3>
-                <p className="text-2xl font-bold text-white">{formatTime(stats.median)}</p>
-              </div>
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-300">95th Percentile</h3>
-                <p className="text-2xl font-bold text-white">{formatTime(stats.p95)}</p>
-              </div>
-              <div className="bg-gray-700 rounded-lg p-4">
-                <h3 className="text-sm font-medium text-gray-300">Total Generations</h3>
-                <p className="text-2xl font-bold text-white">{stats.total_generations}</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Prompts Section */}
-        <div className="bg-gray-800 shadow rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">Prompts</h2>
-          <div className="flex flex-col gap-4">
-            {prompts.map((prompt) => (
-              <div key={prompt.id} className="bg-gray-700 p-4 rounded-lg">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-medium text-white mb-2">{prompt.topic}</h3>
-                    <p className="text-gray-300 mb-4">{truncateContent(prompt.content)}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-2 py-1 bg-purple-600 text-white text-sm rounded">
-                        {prompt.subject}
-                      </span>
-                      {prompt.tags.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 bg-blue-600 text-white text-sm rounded"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex space-x-2 ml-4 flex-shrink-0">
-                    <button
-                      onClick={() => handleEdit(prompt.id)}
-                      className="text-blue-400 hover:text-blue-300"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(prompt.id)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Gold Standards Section */}
-        <div className="bg-gray-800 shadow rounded-lg p-6 mt-8">
-          <h2 className="text-xl font-semibold text-white mb-4">Gold Standards</h2>
-          
-          {/* Add New Gold Standard */}
-          <div className="bg-gray-700 rounded-lg p-4 mb-6">
-            <h3 className="text-lg font-medium text-white mb-4">Add New Gold Standard</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300">HTML File</label>
-                <div className="flex gap-2">
-                  <input
-                    type="file"
-                    accept=".html"
-                    onChange={handleFileUpload}
-                    className="flex-1 mt-1 block w-full text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-                  />
-                  <button
-                    onClick={analyzeHtml}
-                    disabled={analyzing || !newGoldStandard.html}
-                    className="mt-1 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {analyzing ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Analyzing...
-                      </>
-                    ) : (
-                      "Analyze HTML"
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300">Topic</label>
-                <input
-                  type="text"
-                  value={newGoldStandard.metadata.topic}
-                  onChange={(e) => setNewGoldStandard({
-                    ...newGoldStandard,
-                    metadata: { ...newGoldStandard.metadata, topic: e.target.value }
-                  })}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300">Subject</label>
-                <input
-                  type="text"
-                  value={newGoldStandard.metadata.subject}
-                  onChange={(e) => setNewGoldStandard({
-                    ...newGoldStandard,
-                    metadata: { ...newGoldStandard.metadata, subject: e.target.value }
-                  })}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-600 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300">Configuration (JSON)</label>
-                <textarea
-                  value={JSON.stringify(newGoldStandard.config, null, 2)}
-                  onChange={handleConfigChange}
-                  rows={5}
-                  className="mt-1 block w-full rounded-md bg-gray-800 border-gray-600 text-white font-mono"
-                />
-              </div>
-              <button
-                onClick={handleAddGoldStandard}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                Add Gold Standard
-              </button>
-            </div>
-          </div>
-
-          {/* Preview Section */}
-          {isPreviewVisible && (
-            <div className="bg-gray-700 rounded-lg p-4 mb-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-white">Preview</h3>
-                <button
-                  onClick={handleFullscreen}
-                  className="flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-600 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                >
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"
+        {activeTab === 0 && (
+          <div className="space-y-6">
+            <div className="bg-gray-800 rounded-lg p-6">
+              <h2 className="text-xl font-semibold mb-4">Gold Standards</h2>
+              
+              {/* Multi-file Upload Section */}
+              <div className="mb-6 bg-gray-700 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-3">Upload Multiple Gold Standards</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-gray-300 mb-2">HTML Files</label>
+                    <input
+                      type="file"
+                      accept=".html"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files);
+                        setMultiUploadFiles(files);
+                      }}
+                      className="block w-full text-sm text-gray-300
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-500 file:text-white
+                        hover:file:bg-blue-600"
                     />
-                  </svg>
-                  Fullscreen
-                </button>
+                    {multiUploadFiles.length > 0 && (
+                      <p className="mt-2 text-gray-300 text-sm">
+                        Selected {multiUploadFiles.length} file(s)
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (multiUploadFiles.length === 0) {
+                        toast.error('Please select files to upload');
+                        return;
+                      }
+
+                      try {
+                        // Create FormData
+                        const formData = new FormData();
+                        multiUploadFiles.forEach(file => {
+                          formData.append('files', file);
+                        });
+
+                        // Start upload
+                        const response = await fetch('http://localhost:8000/api/v1/gold-standards/', {
+                          method: 'POST',
+                          body: formData,
+                        });
+
+                        if (!response.ok) {
+                          throw new Error('Failed to start bulk upload');
+                        }
+
+                        const data = await response.json();
+                        setMultiUploadId(data.upload_id);
+                        setMultiUploadStatus('processing');
+                        setMultiUploadPolling(true);
+
+                        // Start polling for status
+                        const pollInterval = setInterval(async () => {
+                          try {
+                            const statusResponse = await fetch(`http://localhost:8000/api/v1/gold-standards/status/${data.upload_id}`);
+                            if (!statusResponse.ok) {
+                              throw new Error('Failed to get upload status');
+                            }
+
+                            const statusData = await statusResponse.json();
+                            setMultiUploadStatus(statusData.status);
+
+                            if (statusData.status === 'completed' || statusData.status === 'failed') {
+                              clearInterval(pollInterval);
+                              setMultiUploadPolling(false);
+                              setMultiUploadFiles([]);
+                              setMultiUploadId(null);
+                              
+                              if (statusData.status === 'completed') {
+                                toast.success('Files uploaded successfully');
+                                fetchGoldStandards(); // Refresh the list
+                              } else {
+                                toast.error('Upload failed: ' + statusData.error);
+                              }
+                            }
+                          } catch (err) {
+                            clearInterval(pollInterval);
+                            setMultiUploadPolling(false);
+                            toast.error('Error checking upload status: ' + err.message);
+                          }
+                        }, 2000); // Poll every 2 seconds
+
+                      } catch (err) {
+                        toast.error('Error starting upload: ' + err.message);
+                      }
+                    }}
+                    disabled={multiUploadFiles.length === 0 || multiUploadPolling}
+                    className={`px-4 py-2 rounded transition-colors ${
+                      multiUploadFiles.length === 0 || multiUploadPolling
+                        ? 'bg-gray-500 cursor-not-allowed'
+                        : 'bg-blue-500 hover:bg-blue-600 text-white'
+                    }`}
+                  >
+                    {multiUploadPolling ? 'Uploading...' : 'Upload Files'}
+                  </button>
+
+                  {multiUploadStatus && (
+                    <div className="mt-2">
+                      <p className="text-gray-300 text-sm">
+                        Status: {typeof multiUploadStatus === 'object' ? multiUploadStatus.status : multiUploadStatus}
+                      </p>
+                      {typeof multiUploadStatus === 'object' && multiUploadStatus.error_message && (
+                        <p className="text-red-400 text-sm mt-1">
+                          Error: {multiUploadStatus.error_message}
+                        </p>
+                      )}
+                      {typeof multiUploadStatus === 'object' && multiUploadStatus.result && (
+                        <div className="mt-2">
+                          <p className="text-gray-300 text-sm font-medium">Results:</p>
+                          <div className="bg-gray-800 p-2 rounded mt-1">
+                            {multiUploadStatus.result.map((result, index) => (
+                              <div key={index} className="mb-2">
+                                <p className="text-gray-300 text-sm">
+                                  File: {result.filename} - {result.status}
+                                </p>
+                                {result.error && (
+                                  <p className="text-red-400 text-sm mt-1">
+                                    Error: {result.error}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="border border-gray-700 rounded-lg overflow-hidden">
-                <iframe
-                  ref={iframeRef}
-                  srcDoc={previewHtml}
-                  className="w-full h-[60vh]"
-                  title="HTML Preview"
-                  sandbox="allow-scripts"
-                />
+
+              {goldStandardsLoading ? (
+                <div className="text-center py-4">Loading...</div>
+              ) : goldStandardsError ? (
+                <div className="text-red-500">{goldStandardsError}</div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border border-gray-700">
+                  <TableContainer component={Paper} className="bg-gray-800">
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell className="text-gray-300">ID</TableCell>
+                          <TableCell className="text-gray-300">Topic</TableCell>
+                          <TableCell className="text-gray-300">Snippet Type</TableCell>
+                          <TableCell className="text-gray-300">Summary</TableCell>
+                          <TableCell className="text-gray-300">Status</TableCell>
+                          <TableCell className="text-gray-300">Validation</TableCell>
+                          <TableCell className="text-gray-300">Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {goldStandards
+                          .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                          .map((standard) => (
+                            <TableRow key={standard.metadata.id} className="hover:bg-gray-700">
+                              <TableCell className="text-gray-300">{standard.metadata.id}</TableCell>
+                              <TableCell className="text-gray-300">{standard.metadata.topic}</TableCell>
+                              <TableCell className="text-gray-300">{standard.metadata.snippet_type}</TableCell>
+                              <TableCell className="text-gray-300">{standard.metadata.summary}</TableCell>
+                              <TableCell className="text-gray-300">
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  standard.metadata.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                                }`}>
+                                  {standard.metadata.validation_status}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-gray-300">
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  standard.metadata.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                                }`}>
+                                  {standard.metadata.validation_status}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEditGoldStandard(standard)}
+                                    className="text-blue-400 hover:text-blue-300"
+                                  >
+                                    <EditIcon />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDelete(standard.metadata.id)}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                    <TablePagination
+                      component="div"
+                      count={goldStandards.length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      className="text-gray-300"
+                      rowsPerPageOptions={[5, 10, 25]}
+                    />
+                  </TableContainer>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Edit Dialog */}
+        <Dialog 
+          open={editDialogOpen} 
+          onClose={() => setEditDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            style: {
+              backgroundColor: '#1f2937',
+              color: 'white',
+              minHeight: '80vh'
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            borderBottom: '1px solid #374151',
+            padding: '16px 24px',
+            '& .MuiTypography-root': { color: 'white' }
+          }}>
+            Edit Gold Standard
+          </DialogTitle>
+          <DialogContent sx={{ padding: '24px' }}>
+            <div className="space-y-6">
+              {/* Basic Info Section */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Basic Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <TextField
+                    label="ID"
+                    value={editForm.id}
+                    disabled
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Topic"
+                    value={editForm.topic}
+                    onChange={(e) => setEditForm({ ...editForm, topic: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Subject"
+                    value={editForm.subject}
+                    onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Type"
+                    value={editForm.type}
+                    onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                </div>
               </div>
-              <div className="mt-4">
-                <h4 className="text-sm font-medium text-gray-300 mb-2">HTML Content</h4>
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <pre className="text-sm text-gray-400 overflow-x-auto">
-                    {previewHtml.substring(0, 200)}...
-                  </pre>
+
+              {/* Content Section */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Content</h3>
+                <div className="space-y-4">
+                  {/* <TextField
+                    label="HTML Content"
+                    value={editForm.html}
+                    onChange={(e) => setEditForm({ ...editForm, html: e.target.value })}
+                    multiline
+                    rows={6}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  /> */}
+                  <div>
+                    <label className="block text-gray-300 mb-2">HTML Snippet</label>
+                    <textarea
+                      value={editForm.html_snippet}
+                      onChange={(e) => setEditForm({ ...editForm, html_snippet: e.target.value })}
+                      rows={8}
+                      className="w-full p-3 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
+                      placeholder="Enter HTML snippet..."
+                    />
+                  </div>
+                  <TextField
+                    label="Summary"
+                    value={editForm.summary}
+                    onChange={(e) => setEditForm({ ...editForm, summary: e.target.value })}
+                    multiline
+                    rows={3}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Metadata Section */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Metadata</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <TextField
+                    label="Key Concepts"
+                    value={editForm.key_concepts}
+                    onChange={(e) => setEditForm({ ...editForm, key_concepts: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Education Level"
+                    value={editForm.education_level}
+                    onChange={(e) => setEditForm({ ...editForm, education_level: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Learning Objectives"
+                    value={editForm.learning_objectives}
+                    onChange={(e) => setEditForm({ ...editForm, learning_objectives: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Tags"
+                    value={editForm.tags}
+                    onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Status Section */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Status Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <TextField
+                    label="Status"
+                    value={editForm.status}
+                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Validation Status"
+                    value={editForm.validation_status}
+                    onChange={(e) => setEditForm({ ...editForm, validation_status: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Snippet Type"
+                    value={editForm.snippet_type}
+                    onChange={(e) => setEditForm({ ...editForm, snippet_type: e.target.value })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
+                  <TextField
+                    label="Retry Count"
+                    type="number"
+                    value={editForm.retry_count}
+                    onChange={(e) => setEditForm({ ...editForm, retry_count: parseInt(e.target.value) })}
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': { borderColor: '#4B5563' },
+                        '&:hover fieldset': { borderColor: '#6B7280' },
+                        '&.Mui-focused fieldset': { borderColor: '#3B82F6' }
+                      },
+                      '& .MuiInputLabel-root': { color: '#9CA3AF' },
+                      '& .MuiInputBase-input': { color: 'white' }
+                    }}
+                  />
                 </div>
               </div>
             </div>
-          )}
+          </DialogContent>
+          <DialogActions sx={{ 
+            borderTop: '1px solid #374151',
+            padding: '16px 24px'
+          }}>
+            <Button 
+              onClick={() => setEditDialogOpen(false)}
+              sx={{ 
+                color: '#9CA3AF',
+                '&:hover': { backgroundColor: 'rgba(156, 163, 175, 0.1)' }
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditSubmit}
+              variant="contained"
+              sx={{ 
+                backgroundColor: '#3B82F6',
+                '&:hover': { backgroundColor: '#2563EB' }
+              }}
+            >
+              Save Changes
+            </Button>
+          </DialogActions>
+        </Dialog>
 
-          {/* Search Section */}
-          <div className="mb-8">
-            <div className="flex gap-4">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search gold standards..."
-                className="flex-1 px-4 py-2 rounded bg-gray-700 text-white focus:outline-none focus:border-blue-500"
-              />
-              <button
-                onClick={handleSearch}
-                disabled={loading}
-                className="px-6 py-2 bg-blue-600 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50"
-              >
-                {loading ? 'Searching...' : 'Search'}
-              </button>
-            </div>
-          </div>
-
-          {/* Error Display */}
-          {goldStandardsError && (
-            <div className="mb-4 p-4 bg-red-900/50 border border-red-500 rounded">
-              {goldStandardsError}
-            </div>
-          )}
-
-          {/* Search Results */}
-          {searchResults.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Search Results</h2>
+        {activeTab === 1 && (
+          <div className="bg-gray-800 shadow rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">Prompts</h2>
+            {loading ? (
+              <div className="text-gray-400">Loading prompts...</div>
+            ) : error ? (
+              <div className="text-red-400">{error}</div>
+            ) : (
               <div className="space-y-4">
-                {searchResults.map((result, index) => (
-                  <div key={index} className="bg-gray-700 rounded-lg p-4">
+                {prompts.map((prompt) => (
+                  <div key={prompt.id} className="bg-gray-700 rounded-lg p-4">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="text-lg font-medium text-white">{result.metadata?.topic}</h3>
-                        <p className="text-gray-300">{result.metadata?.subject}</p>
-                        <div className="mt-2">
-                          <pre className="text-sm text-gray-400 overflow-x-auto">
-                            {result.metadata?.html ? result.metadata.html.substring(0, 200) + '...' : 'No HTML content'}
-                          </pre>
-                        </div>
-                        {result.distance && (
-                          <p className="text-sm text-gray-400 mt-2">
-                            Similarity Score: {(1 - result.distance).toFixed(2)}
-                          </p>
+                        <h3 className="text-lg font-medium text-white">{prompt.topic}</h3>
+                        <p className="text-gray-300 text-sm">Subject: {prompt.subject}</p>
+                        {prompt.category && (
+                          <p className="text-gray-300 text-sm">Category: {prompt.category}</p>
+                        )}
+                        {prompt.tags && prompt.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {prompt.tags.map((tag, index) => (
+                              <span
+                                key={index}
+                                className="bg-gray-600 text-gray-200 px-2 py-1 rounded text-xs"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleDelete(result.id)}
-                        className="px-3 py-1 bg-red-600 rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-                      >
-                        Delete
-                      </button>
+                    </div>
+                    <div className="mt-2">
+                      <p className="text-gray-300 whitespace-pre-wrap">{prompt.content}</p>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Gold Standards List */}
-          <div>
-            <h2 className="text-xl font-semibold mb-4">All Gold Standards</h2>
-            <div className="space-y-4">
-              {goldStandards.map((standard, index) => (
-                <div key={index} className="bg-gray-700 rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-medium text-white">{standard.metadata?.topic}</h3>
-                      <p className="text-gray-300">{standard.metadata?.subject}</p>
-                      <div className="mt-2">
-                        <pre className="text-sm text-gray-400 overflow-x-auto">
-                          {standard.metadata?.html ? standard.metadata.html.substring(0, 200) + '...' : 'No HTML content'}
-                        </pre>
-                      </div>
-                      {standard.distance && (
-                        <p className="text-sm text-gray-400 mt-2">
-                          Similarity Score: {(1 - standard.distance).toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDelete(standard.id)}
-                      className="px-3 py-1 bg-red-600 rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {activeTab === 2 && (
+          <div className="bg-gray-800 shadow rounded-lg p-6">
+            <FAISSDashboard />
+          </div>
+        )}
       </div>
-
-      {/* Edit Modal */}
-      {editingPrompt && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-4xl">
-            <h2 className="text-2xl font-bold text-white mb-4">Edit Prompt</h2>
-            <form onSubmit={handleEditSubmit}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-gray-300 mb-2">Topic</label>
-                  <input
-                    type="text"
-                    value={editForm.topic}
-                    onChange={(e) => setEditForm({ ...editForm, topic: e.target.value })}
-                    className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-300 mb-2">Content (Markdown)</label>
-                  <div className="border border-gray-600 rounded">
-                    <MdEditor
-                      value={editForm.content}
-                      style={{ height: '400px' }}
-                      renderHTML={(text) => mdParser.render(text)}
-                      onChange={({ text }) => setEditForm({ ...editForm, content: text })}
-                      config={{
-                        view: {
-                          menu: true,
-                          md: true,
-                          html: true,
-                          fullScreen: true,
-                          hideMenu: false,
-                        },
-                        canView: {
-                          menu: true,
-                          md: true,
-                          html: true,
-                          fullScreen: true,
-                          hideMenu: false,
-                        },
-                      }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-gray-300 mb-2">Subject</label>
-                  <input
-                    type="text"
-                    value={editForm.subject}
-                    onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
-                    className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-300 mb-2">Tags (comma-separated)</label>
-                  <input
-                    type="text"
-                    value={editForm.tags}
-                    onChange={(e) => setEditForm({ ...editForm, tags: e.target.value })}
-                    className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600"
-                    placeholder="tag1, tag2, tag3"
-                  />
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setEditingPrompt(null)}
-                  className="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

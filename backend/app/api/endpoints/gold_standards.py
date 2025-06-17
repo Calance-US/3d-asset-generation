@@ -1,16 +1,27 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
 from typing import List, Dict, Any
 from pydantic import BaseModel
-from app.rag.rag_service import get_rag_service
-from app.rag.vector_store import get_vector_store
+from app.services.rag import get_rag_service, get_vector_store, get_metadata_service
 from app.config.settings import settings
-from app.schemas.schemas import EnhancedPromptResponse
+from app.schemas.schemas import EnhancedPromptResponse, EnhancedConfigSchema, SnippetSchema, SnippetType
+from app.utils import create_embedding_text, coerce_to_schema
 from openai import AsyncOpenAI
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 import aiohttp
 import json
 import logging
+import asyncio
+from app.models import GoldStandardUploadStatus
+from app.database.db_config import SessionLocal
+from sqlalchemy.orm import Session
+import uuid
+import re
+import hashlib
+from datetime import datetime
+import traceback
+from app.services.rag.embedding_service import EmbeddingService
+from app.utils.embedding_utils import build_embedding_text_from_config
 
 router = APIRouter()
 
@@ -18,6 +29,10 @@ class GoldStandardCreate(BaseModel):
     html: str
     config: Dict[str, Any]
     metadata: Dict[str, Any] = None
+
+class GoldStandardUpdate(BaseModel):
+    html: str = ""
+    metadata: Dict[str, Any]
 
 class GoldStandardResponse(BaseModel):
     id: int
@@ -29,111 +44,93 @@ class HtmlAnalysisRequest(BaseModel):
     html: str
     provider: str = "openai"  # Default to OpenAI
 
-@router.post("/", response_model=GoldStandardResponse)
-async def create_gold_standard(
-    gold_standard: GoldStandardCreate,
+@router.post("/")
+async def create_gold_standards(
+    files: List[UploadFile] = File(..., description="One or more HTML files to analyze and ingest as gold standards"),
+    background_tasks: BackgroundTasks = None,
     rag_service = Depends(get_rag_service)
-):
-    """Add a new gold standard visualization to the vector store."""
+) -> Dict[str, Any]:
+    """Create gold standards from HTML files."""
+    db: Session = SessionLocal()
+    upload_id = str(uuid.uuid4())
+    status_row = GoldStandardUploadStatus(
+        id=upload_id,
+        status="processing",
+        result=None,
+        error_message=None
+    )
+    db.add(status_row)
+    db.commit()
+    db.refresh(status_row)
+
     try:
-        logging.info("Creating new gold standard", extra={
-            "action": "create_gold_standard",
-            "has_config": bool(gold_standard.config),
-            "has_metadata": bool(gold_standard.metadata)
-        })
-
-        # Add to vector store
-        rag_service.add_gold_standard(
-            html=gold_standard.html,
-            config=gold_standard.config,
-            metadata=gold_standard.metadata or {}
-        )
-
-        # Get the index of the newly added entry
-        vector_store = get_vector_store()
-        new_index = len(vector_store.metadata) - 1
-
-        logging.info("Successfully added gold standard to vector store", extra={
-            "action": "create_gold_standard",
-            "index": new_index
-        })
-
-        return GoldStandardResponse(
-            id=new_index,
-            metadata=gold_standard.metadata or {}
-        )
-
+        # Process files concurrently with retry logic
+        file_tasks = [process_with_retry(file, upload_id) for file in files]
+        results = await asyncio.gather(*file_tasks)
+        
+        status_row.status = "completed"
+        status_row.set_result(results)
+        status_row.error_message = None
+        
     except Exception as e:
-        logging.error("Error creating gold standard", extra={
-            "action": "create_gold_standard",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error creating gold standard: {str(e)}"
-        )
+        status_row.status = "error"
+        status_row.set_result(None)
+        status_row.error_message = str(e)
+        
+    finally:
+        current_status = status_row.status
+        db.add(status_row)
+        db.commit()
+        db.close()
+
+    return {"upload_id": upload_id, "status": current_status}
+
+@router.get("/status/{upload_id}")
+def get_gold_standard_upload_status(upload_id: str):
+    db: Session = SessionLocal()
+    status_row = db.query(GoldStandardUploadStatus).filter_by(id=upload_id).first()
+    if not status_row:
+        db.close()
+        raise HTTPException(status_code=404, detail="Upload status not found")
+    result = {
+        "upload_id": status_row.id,
+        "status": status_row.status,
+        "result": status_row.get_result(),
+        "error_message": status_row.error_message,
+        "created_at": status_row.created_at,
+        "updated_at": status_row.updated_at,
+    }
+    db.close()
+    return result
+
+def build_gold_standard_prompt(html_content: str) -> str:
+    schema_json = json.dumps(EnhancedConfigSchema.model_json_schema(), indent=2)
+    prompt = settings.GOLD_STANDARD_ANALYSIS_PROMPT.format(
+        json_schema=schema_json,
+        html_content=html_content
+    )
+    return prompt
+
+def normalize_snippet_types(snippets):
+    """Ensure all snippets are dicts and snippet_type is valid, else set to 'miscellaneous'."""
+    allowed_types = {e.value for e in SnippetType}
+    normalized = []
+    for snippet in snippets:
+        # Convert to dict if it's a Pydantic model
+        if hasattr(snippet, 'model_dump'):
+            snippet = snippet.model_dump(mode='python', by_alias=True)
+        # Map invalid snippet_type to 'miscellaneous'
+        if 'snippet_type' in snippet and snippet['snippet_type'] not in allowed_types:
+            snippet['snippet_type'] = 'miscellaneous'
+        normalized.append(snippet)
+    return normalized
 
 @router.post("/analyze", response_model=EnhancedPromptResponse)
 async def analyze_html(request: HtmlAnalysisRequest):
     """Analyze HTML content and extract configuration and topic."""
     try:
         # Create a prompt for the LLM to analyze the HTML
-        analysis_prompt = f"""Given the following HTML visualization, analyze it and generate a detailed configuration. Return the response as a JSON object with the following structure.
-        IMPORTANT: Keep all text fields concise (max 200 characters) to avoid truncation.
-        {{
-            "topic_name": "A short, concise name for the topic (max 20 chars)",
-            "key_concepts": "Comma separated main concepts to be visualized (max 200 chars)",
-            "education_level": "choose between Elementary, Middle School, High School or College",
-            "learning_objectives": "What students will learn (max 200 chars)",
-            "interactive_features": "What users can interact with in the scene (max 200 chars)",
-            "scene_description": "A detailed description of the 3D scene with realistic details(max 1000 chars)",
-            "components": [
-                {{
-                    "component_name": "Name of a 3D component required in the 3D scene (max 50 chars)",
-                    "component_description": "Description of what this component represents in the 3D scene (max 100 chars)"
-                }}
-            ],
-            "materials": [
-                {{
-                    "material_name": "Name of the material (based on the components)",
-                    "material_type": "Type of material (choose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial)",
-                    "color": "#RRGGBB",
-                    "metalness": 0.5,
-                    "roughness": 0.5,
-                    "emissive": "#RRGGBB",
-                    "emissiveIntensity": 0.5
-                }}
-            ],
-            "lights": [
-                {{
-                    "light_type": "Type of light (max 50 chars)",
-                    "light_class": "THREE.LightClass [choose between DirectionalLight, AmbientLight, HemisphereLight]",
-                    "light_color": "#RRGGBB",
-                    "intensity": 0.5
-                }}
-            ],
-            "interactive_description": "How users can interact with the visualization (max 200 chars)",
-            "animated_elements": "What components should be animated and how (max 200 chars)",
-            "intro_narration_texts": [
-                "Concise introductory narration texts about the topic to be played at the start (each max 500 chars)"
-            ],
-            "supporting_narration_texts": [
-                "Short texts to be played during user interactions explaining controls or feedback (each max 100 chars)"
-            ]
-        }}
-
-        HTML Content:
-        {request.html}
-
-        IMPORTANT:
-        1. Return ONLY the JSON object, no other text or explanation.
-        2. Keep all text fields concise to avoid truncation.
-        3. Ensure all JSON fields are properly closed.
-        4. Do not include any markdown formatting.
-        5. Analyze the HTML to identify the 3D components, materials, and lighting setup.
-        6. Extract the educational content and learning objectives from the visualization.
-        """
+        analysis_prompt = build_gold_standard_prompt(request.html)
 
         # Initialize OpenAI client if API key is available
         if settings.OPENAI_API_KEY:
@@ -204,6 +201,13 @@ async def analyze_html(request: HtmlAnalysisRequest):
         if not generated_text:
             raise HTTPException(status_code=500, detail="No response from LLM")
 
+        # Log the raw LLM response
+        logging.info("Raw LLM response:", extra={
+            "action": "analyze_html",
+            "provider": request.provider,
+            "response": generated_text
+        })
+
         # Clean the response to ensure it's valid JSON
         try:
             # Remove any markdown code block markers
@@ -214,19 +218,55 @@ async def analyze_html(request: HtmlAnalysisRequest):
             if start_idx >= 0 and end_idx > start_idx:
                 cleaned_text = cleaned_text[start_idx:end_idx]
 
+            # Log the cleaned response
+            logging.info("Cleaned LLM response:", extra={
+                "action": "analyze_html",
+                "provider": request.provider,
+                "response": cleaned_text
+            })
+
             # Validate JSON structure
             enhanced_config = json.loads(cleaned_text)
+            # Normalize snippet types before any validation
+            if 'snippets' in enhanced_config:
+                enhanced_config['snippets'] = normalize_snippet_types(enhanced_config['snippets'])
             
+            # Log the parsed configuration
+            logging.info("Parsed configuration:", extra={
+                "action": "analyze_html",
+                "provider": request.provider,
+                "config": json.dumps(enhanced_config, indent=2)
+            })
+
             # Validate required fields
             required_fields = [
                 "topic_name", "key_concepts", "education_level", "learning_objectives",
                 "interactive_features", "components", "materials", "lights",
                 "interactive_description", "animated_elements", "intro_narration_texts", 
-                "supporting_narration_texts", "scene_description"
+                "supporting_narration_texts", "scene_description", "snippets"
             ]
             missing_fields = [field for field in required_fields if field not in enhanced_config]
             if missing_fields:
                 raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+
+            # Validate snippets structure
+            if not enhanced_config.get("snippets"):
+                raise ValueError("Response must include at least one snippet")
+                
+            for snippet in enhanced_config.get("snippets", []):
+                snippet_fields = ["snippet_type", "summary", "embedding_text", "html_snippet"]
+                missing_snippet_fields = [field for field in snippet_fields if field not in snippet]
+                if missing_snippet_fields:
+                    raise ValueError(f"Missing required snippet fields: {', '.join(missing_snippet_fields)}")
+                
+                # No need to raise error for invalid snippet_type, as normalization guarantees validity
+
+            # Clamp light intensity values to 1.0 before schema validation
+            if 'lights' in enhanced_config:
+                for light in enhanced_config['lights']:
+                    if 'intensity' in light and isinstance(light['intensity'], (int, float)):
+                        if light['intensity'] > 1.0:
+                            light['intensity'] = 1.0
 
             return EnhancedPromptResponse(**enhanced_config)
 
@@ -251,7 +291,17 @@ async def search_gold_standards(
 ):
     """Search for similar gold standard visualizations."""
     try:
-        results = rag_service.get_similar_visualizations(query, top_k=top_k)
+        # Create embedding text for the query using the same function
+        query_embedding_text = create_embedding_text(
+            llm_embedding_text=query,  # Use the query as the primary semantic content
+            snippet_type="",  # We don't know the type for the query
+            topic="",  # We don't know the topic for the query
+            concepts=""  # We don't know the concepts for the query
+        )
+        
+        # Get similar visualizations using the query embedding text
+        results = rag_service.get_similar_visualizations(query_embedding_text, top_k=top_k)
+        
         return [
             GoldStandardResponse(
                 id=i,
@@ -273,13 +323,66 @@ async def list_gold_standards(
         return [
             GoldStandardResponse(
                 id=i,
-                metadata=metadata,
-                html=metadata.get('html', '')
+                metadata=viz['metadata'],
+                html=viz['metadata'].get('html', '')
             )
-            for i, metadata in enumerate(vector_store.metadata)
+            for i, viz in enumerate(vector_store.visualizations)
         ]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{index}", response_model=GoldStandardResponse)
+async def update_gold_standard(
+    index: int,
+    gold_standard: GoldStandardUpdate,
+    rag_service = Depends(get_rag_service)
+):
+    """Update a gold standard visualization in the vector store."""
+    try:
+        vector_store = get_vector_store()
+        
+        # Get the existing visualization
+        if index >= len(vector_store.visualizations):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Gold standard at index {index} not found"
+            )
+            
+        # Update the visualization
+        vector_store.visualizations[index]['metadata'].update(gold_standard.metadata)
+        if gold_standard.html:
+            vector_store.visualizations[index]['metadata']['html'] = gold_standard.html
+            
+        # Save the updated vector store
+        vector_store.save(settings.VECTOR_STORE_PATH)
+        
+        logging.info("Successfully updated gold standard", extra={
+            "action": "update_gold_standard",
+            "index": index
+        })
+        
+        return GoldStandardResponse(
+            id=index,
+            metadata=vector_store.visualizations[index]['metadata'],
+            html=vector_store.visualizations[index]['metadata'].get('html', '')
+        )
+            
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except Exception as e:
+        logging.error("Error updating gold standard", extra={
+            "action": "update_gold_standard",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "index": index
+        })
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating gold standard: {str(e)}"
+        )
 
 @router.delete("/{index}")
 async def delete_gold_standard(
@@ -322,4 +425,127 @@ async def delete_gold_standard(
         raise HTTPException(
             status_code=500,
             detail=f"Error deleting gold standard: {str(e)}"
-        ) 
+        )
+
+async def process_with_retry(file: UploadFile, upload_id: str, max_retries: int = 3) -> Dict[str, Any]:
+    """Process a file with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            return await process_file(file, upload_id)
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            logging.warning(f"Retry {attempt + 1}/{max_retries} for file {file.filename}: {str(e)}")
+            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+
+async def process_file(file: UploadFile, upload_id: str) -> Dict[str, Any]:
+    """Process a single file."""
+    file_result = {"filename": file.filename, "status": "pending", "snippets": [], "error": None}
+    try:
+        html = (await file.read()).decode("utf-8")
+        class DummyRequest:
+            def __init__(self, html):
+                self.html = html
+                self.provider = "openai"
+        try:
+            # Get enhanced config from LLM
+            enhanced_config = await analyze_html(DummyRequest(html))
+            # Convert to plain dict (bulletproof) if it's a Pydantic model
+            import json as _json
+            if hasattr(enhanced_config, 'model_dump_json'):
+                enhanced_config_dict = _json.loads(enhanced_config.model_dump_json())
+            elif hasattr(enhanced_config, 'model_dump'):
+                enhanced_config_dict = enhanced_config.model_dump(mode='python', by_alias=True)
+            else:
+                enhanced_config_dict = enhanced_config
+            # Normalize snippet types before coercion/validation
+            if 'snippets' in enhanced_config_dict:
+                enhanced_config_dict['snippets'] = normalize_snippet_types(enhanced_config_dict['snippets'])
+            # Coerce and validate all fields using the schema
+            enhanced_config_dict = coerce_to_schema(enhanced_config_dict, EnhancedConfigSchema)
+            # Validate against schema
+            try:
+                validated_config = EnhancedConfigSchema(**enhanced_config_dict)
+            except Exception as e:
+                raise ValueError(f"Invalid config schema: {str(e)}")
+            file_result["status"] = "success"
+            file_result["config"] = validated_config.dict()
+            # Initialize vector_store at the start
+            vector_store = get_vector_store()
+            # Process snippets
+            embedding_text = build_embedding_text_from_config(validated_config.dict())
+            embedding = EmbeddingService.generate_embedding(embedding_text)
+            snippet_results = []
+            for snippet in validated_config.snippets:
+                snippet_result = {
+                    "snippet_type": snippet.snippet_type,
+                    "summary": snippet.summary,
+                    "status": "pending",
+                    "error": None
+                }
+                try:
+                    # Generate hash for deduplication
+                    snippet_hash = hashlib.sha256(snippet.html_snippet.encode()).hexdigest()
+                    # Check for duplicates
+                    metadata_service = get_metadata_service()
+                    existing = await metadata_service.get_by_hash(snippet_hash)
+                    # Patch: Also check vector store for snippet_hash
+                    in_vector_store = vector_store.has_snippet_hash(snippet_hash)
+                    if existing or in_vector_store:
+                        # Update existing snippet in metadata store if present
+                        if existing:
+                            await metadata_service.update_snippet(snippet_hash, {
+                                "updated_at": datetime.utcnow(),
+                                "retry_count": existing.retry_count + 1
+                            })
+                        snippet_result["status"] = "duplicate"
+                        snippet_result["message"] = "Snippet already exists"
+                        snippet_results.append(snippet_result)
+                        continue
+                    # Store snippet metadata
+                    snippet_metadata = {
+                        "id": str(uuid.uuid4()),  # Ensure id is a string
+                        "snippet_hash": snippet_hash,
+                        "snippet_type": snippet.snippet_type.value if hasattr(snippet.snippet_type, "value") else str(snippet.snippet_type),
+                        "summary": snippet.summary,
+                        "embedding_text": embedding_text,
+                        "html_snippet": snippet.html_snippet,
+                        "filename": file.filename,
+                        "upload_id": str(upload_id),  # Ensure upload_id is a string
+                        "llm_version": settings.OPENAI_MODEL,
+                        "validation_status": "pending",
+                        "validation_errors": [],
+                        "retry_count": 0,
+                        "topic": validated_config.topic_name,
+                        "key_concepts": validated_config.key_concepts,
+                        "education_level": validated_config.education_level.value if hasattr(validated_config.education_level, "value") else str(validated_config.education_level),
+                        "learning_objectives": validated_config.learning_objectives
+                    }
+                    # Add to metadata store
+                    metadata_service = get_metadata_service()
+                    await metadata_service.add_snippet(snippet_metadata)
+                    # Add to vector store (await async method)
+                    await vector_store.add_visualization(embedding, snippet_metadata)
+                    snippet_result["status"] = "success"
+                except Exception as e:
+                    snippet_result["status"] = "error"
+                    snippet_result["error"] = str(e)
+                snippet_results.append(snippet_result)
+            file_result["snippets"] = snippet_results
+            # Save vector store
+            vector_store.save(settings.VECTOR_STORE_PATH)
+        except Exception as e:
+            file_result["status"] = "error"
+            if isinstance(e, HTTPException):
+                file_result["error"] = f"HTTPException: {getattr(e, 'detail', '')}"
+            else:
+                file_result["error"] = f"{type(e).__name__}: {str(e)}"
+            logging.error(f"Error processing file {file.filename}: {e}\n{traceback.format_exc()}")
+    except Exception as e:
+        file_result["status"] = "error"
+        if isinstance(e, HTTPException):
+            file_result["error"] = f"HTTPException: {getattr(e, 'detail', '')}"
+        else:
+            file_result["error"] = f"{type(e).__name__}: {str(e)}"
+        logging.error(f"Error reading file {file.filename}: {e}\n{traceback.format_exc()}")
+    return file_result 

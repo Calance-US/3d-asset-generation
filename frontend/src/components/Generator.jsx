@@ -508,6 +508,65 @@ export default function Generator() {
     }
   };
 
+  // Handler to fetch all retrieved results (for development)
+  async function handleRetrieveSimilar() {
+    if (!prompt) {
+      console.warn("Attempting to retrieve with empty prompt");
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch("http://localhost:8000/retrieve-similar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          topic: prompt,
+          provider: provider,
+          subject: subject,
+          config: {
+            ...config,
+            three_js_url: "https://esm.sh/three@0.155.0",
+            orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
+            camera_controls: "OrbitControls",
+            curve_points: [{ x: 0, y: 0, z: 0 }],
+            animation_speed: 1.0,
+            tts_language: "en-US",
+            tts_rate: 1.0,
+            tts_pitch: 1.0,
+            renderer: {
+              antialias: config?.renderer?.antialias ?? true,
+              shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
+              shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
+              outputColorSpace: config?.renderer?.outputColorSpace || "SRGBColorSpace",
+              toneMapping: config?.renderer?.toneMapping || "ACESFilmicToneMapping",
+              toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
+            }
+          }
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      // Log the retrieval results to the console
+      if (data.results) {
+        console.log("Retrieved Results:", data.results);
+        alert("Check the console for retrieved results.");
+      } else {
+        console.log("No retrieval results found in response.", data);
+        alert("No retrieval results found in response.");
+      }
+    } catch (err) {
+      setError(`Error retrieving similar visualizations: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-900">
       <ToastContainer />
@@ -1181,6 +1240,19 @@ export default function Generator() {
                   >
                     {loading ? 'Generating...' : 'Generate Scene'}
                   </button>
+
+                  {/* Show retrieval button only in development mode */}
+                  {process.env.NODE_ENV === 'development' && (
+                    <button
+                      onClick={handleRetrieveSimilar}
+                      disabled={loading}
+                      className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 ${
+                        loading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {loading ? 'Retrieving...' : 'Show Retrieval Results'}
+                    </button>
+                  )}
 
                   <button
                     onClick={handleReset}

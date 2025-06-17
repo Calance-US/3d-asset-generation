@@ -34,20 +34,30 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    # Create engine configuration from settings
+    url = settings.DATABASE_URL
+
+    # Detect if using SQLite
+    is_sqlite = url.startswith("sqlite")
+
+    # Build configuration dict accordingly
     configuration = {
-        "sqlalchemy.url": settings.DATABASE_URL,
+        "sqlalchemy.url": url,
         "sqlalchemy.echo": settings.DATABASE_ECHO,
-        "sqlalchemy.pool_size": settings.DATABASE_POOL_SIZE,
-        "sqlalchemy.max_overflow": settings.DATABASE_MAX_OVERFLOW,
-        "sqlalchemy.pool_timeout": settings.DATABASE_POOL_TIMEOUT,
-        "sqlalchemy.pool_recycle": settings.DATABASE_POOL_RECYCLE,
     }
-    
+
+    if not is_sqlite:
+        # Only add pool options for non-SQLite DBs
+        configuration.update({
+            "sqlalchemy.pool_size": settings.DATABASE_POOL_SIZE,
+            "sqlalchemy.max_overflow": settings.DATABASE_MAX_OVERFLOW,
+            "sqlalchemy.pool_timeout": settings.DATABASE_POOL_TIMEOUT,
+            "sqlalchemy.pool_recycle": settings.DATABASE_POOL_RECYCLE,
+        })
+
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+        poolclass=pool.NullPool,  # This is fine for both SQLite and dev use
     )
 
     with connectable.connect() as connection:

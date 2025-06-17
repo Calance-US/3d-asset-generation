@@ -1,0 +1,276 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.database.database import (
+    get_db,
+    get_prompts,
+    create_prompt,
+    update_prompt,
+    delete_prompt,
+    duplicate_prompt,
+    batch_delete_prompts,
+    export_prompts,
+    import_prompts
+)
+from app.schemas.schemas import (
+    UpdatePromptRequest,
+    CreatePromptRequest,
+    BatchDeleteRequest,
+    ImportPromptsRequest,
+    PromptResponse,
+    PromptsResponse,
+    SuccessResponse
+)
+from app.services.prompt_selector import PromptSelector
+from typing import List, Dict, Any, Optional
+import numpy as np
+from app.services.rag import get_vector_store
+
+router = APIRouter()
+prompt_selector = PromptSelector()
+
+@router.get("/faiss-stats", response_model=Dict[str, Any])
+async def get_faiss_stats():
+    """Get statistics about the FAISS index."""
+    vector_store = get_vector_store()
+    
+    if vector_store.faiss_index is None:
+        return {
+            "total_vectors": 0,
+            "dimension": 0,
+            "index_type": "None",
+            "snippet_types": {},
+            "topics": {},
+            "education_levels": {}
+        }
+    
+    # Get basic index stats
+    stats = {
+        "total_vectors": vector_store.faiss_index.ntotal,
+        "dimension": vector_store.faiss_index.d,
+        "index_type": type(vector_store.faiss_index).__name__,
+        "snippet_types": {},
+        "topics": {},
+        "education_levels": {}
+    }
+    
+    # Count metadata distributions
+    for viz in vector_store.visualizations:
+        metadata = viz['metadata']
+        
+        # Count snippet types
+        snippet_type = metadata.get('snippet_type', 'unknown')
+        stats['snippet_types'][snippet_type] = stats['snippet_types'].get(snippet_type, 0) + 1
+        
+        # Count topics
+        topic = metadata.get('topic', 'unknown')
+        stats['topics'][topic] = stats['topics'].get(topic, 0) + 1
+        
+        # Count education levels
+        level = metadata.get('education_level', 'unknown')
+        stats['education_levels'][level] = stats['education_levels'].get(level, 0) + 1
+    
+    return stats
+
+@router.get("/faiss-vectors", response_model=List[Dict[str, Any]])
+async def get_faiss_vectors(
+    skip: int = 0,
+    limit: int = 100,
+    snippet_type: Optional[str] = None,
+    topic: Optional[str] = None,
+    education_level: Optional[str] = None
+):
+    """Get paginated vectors from the FAISS index with optional filtering."""
+    vector_store = get_vector_store()
+    
+    if vector_store.faiss_index is None:
+        return []
+    
+    # Filter visualizations based on criteria
+    filtered_viz = vector_store.visualizations
+    if snippet_type:
+        filtered_viz = [v for v in filtered_viz if v['metadata'].get('snippet_type') == snippet_type]
+    if topic:
+        filtered_viz = [v for v in filtered_viz if v['metadata'].get('topic') == topic]
+    if education_level:
+        filtered_viz = [v for v in filtered_viz if v['metadata'].get('education_level') == education_level]
+    
+    # Apply pagination
+    paginated_viz = filtered_viz[skip:skip + limit]
+    
+    # Format response
+    return [
+        {
+            "id": viz['metadata'].get('id'),
+            "snippet_type": viz['metadata'].get('snippet_type'),
+            "topic": viz['metadata'].get('topic'),
+            "education_level": viz['metadata'].get('education_level'),
+            "summary": viz['metadata'].get('summary'),
+            "filename": viz['metadata'].get('filename'),
+            "embedding_norm": float(np.linalg.norm(viz['embedding'])),
+            "embedding_mean": float(np.mean(viz['embedding'])),
+            "embedding_std": float(np.std(viz['embedding']))
+        }
+        for viz in paginated_viz
+    ]
+
+@router.get("/prompts", response_model=PromptsResponse)
+async def get_all_prompts(
+    subject: Optional[str] = None,
+    category: Optional[str] = None,
+    tag: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+) -> PromptsResponse:
+    """Get all prompts from the database with optional filtering."""
+    try:
+        prompts = get_prompts(db, subject, category, tag, search)
+        return PromptsResponse(prompts=[
+            PromptResponse(
+                id=prompt.id,
+                subject=prompt.subject,
+                topic=prompt.topic,
+                content=prompt.content,
+                category=prompt.category,
+                tags=[tag.name for tag in prompt.tags]
+            )
+            for prompt in prompts
+        ])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prompts", response_model=PromptResponse)
+async def create_prompt_endpoint(
+    prompt_data: CreatePromptRequest,
+    db: Session = Depends(get_db)
+) -> PromptResponse:
+    """Create a new prompt in the database."""
+    try:
+        new_prompt = create_prompt(
+            db,
+            subject=prompt_data.subject,
+            topic=prompt_data.topic,
+            content=prompt_data.content,
+            category=prompt_data.category,
+            tags=",".join(prompt_data.tags) if prompt_data.tags else ""
+        )
+        prompt_selector.initialize_index()
+        return PromptResponse(
+            id=new_prompt.id,
+            subject=new_prompt.subject,
+            topic=new_prompt.topic,
+            content=new_prompt.content,
+            category=new_prompt.category,
+            tags=[tag.name for tag in new_prompt.tags]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/prompts/{prompt_id}", response_model=PromptResponse)
+async def update_prompt_endpoint(
+    prompt_id: int,
+    prompt_data: UpdatePromptRequest,
+    db: Session = Depends(get_db)
+) -> PromptResponse:
+    """Update a prompt in the database."""
+    try:
+        update_data = {k: v for k, v in prompt_data.dict().items() if v is not None}
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No valid fields provided for update")
+        updated_prompt = update_prompt(db, prompt_id, update_data)
+        if not updated_prompt:
+            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
+        prompt_selector.initialize_index()
+        return PromptResponse(
+            id=updated_prompt.id,
+            subject=updated_prompt.subject,
+            topic=updated_prompt.topic,
+            content=updated_prompt.content,
+            category=updated_prompt.category,
+            tags=[tag.name for tag in updated_prompt.tags]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/prompts/{prompt_id}", response_model=SuccessResponse)
+async def delete_prompt_endpoint(
+    prompt_id: int,
+    db: Session = Depends(get_db)
+) -> SuccessResponse:
+    """Delete a prompt from the database."""
+    try:
+        success = delete_prompt(db, prompt_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
+        prompt_selector.initialize_index()
+        return SuccessResponse(status="success")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prompts/{prompt_id}/duplicate", response_model=PromptResponse)
+async def duplicate_prompt_endpoint(
+    prompt_id: int,
+    db: Session = Depends(get_db)
+) -> PromptResponse:
+    """Duplicate a prompt."""
+    try:
+        duplicated = duplicate_prompt(db, prompt_id)
+        if not duplicated:
+            raise HTTPException(status_code=404, detail=f"Prompt with ID {prompt_id} not found")
+        return PromptResponse(
+            id=duplicated.id,
+            subject=duplicated.subject,
+            topic=duplicated.topic,
+            content=duplicated.content,
+            category=duplicated.category,
+            tags=[tag.name for tag in duplicated.tags]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prompts/batch-delete", response_model=SuccessResponse)
+async def batch_delete_prompts_endpoint(
+    request: BatchDeleteRequest,
+    db: Session = Depends(get_db)
+) -> SuccessResponse:
+    """Delete multiple prompts."""
+    try:
+        success = batch_delete_prompts(db, request.prompt_ids)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete prompts")
+        prompt_selector.initialize_index()
+        return SuccessResponse(status="success")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/prompts/export", response_model=PromptsResponse)
+async def export_prompts_endpoint(db: Session = Depends(get_db)) -> PromptsResponse:
+    """Export all prompts."""
+    try:
+        prompts_data = export_prompts(db)
+        return PromptsResponse(prompts=[
+            PromptResponse(
+                id=prompt["id"],
+                subject=prompt["subject"],
+                topic=prompt["topic"],
+                content=prompt["content"],
+                category=prompt["category"],
+                tags=prompt["tags"]
+            )
+            for prompt in prompts_data
+        ])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prompts/import", response_model=SuccessResponse)
+async def import_prompts_endpoint(
+    request: ImportPromptsRequest,
+    db: Session = Depends(get_db)
+) -> SuccessResponse:
+    """Import prompts."""
+    try:
+        success = import_prompts(db, request.prompts)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to import prompts")
+        return SuccessResponse(status="success")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) 
