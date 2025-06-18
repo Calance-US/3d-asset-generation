@@ -72,7 +72,7 @@ export default function Generator() {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch("http://localhost:8000/history");
+      const response = await fetch("http://localhost:8000/api/v1/history");
       if (!response.ok) {
         throw new Error(`Failed to load history: ${response.statusText}`);
       }
@@ -118,7 +118,7 @@ export default function Generator() {
         }
       });
 
-      const response = await fetch("http://localhost:8000/generate", {
+      const response = await fetch("http://localhost:8000/api/v1/visualizations/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -181,7 +181,7 @@ export default function Generator() {
 
     try {
       console.debug("Sending enhancement request to backend");
-      const response = await fetch("http://localhost:8000/enhance-prompt", {
+      const response = await fetch("http://localhost:8000/api/v1/prompt/enhance-prompt", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -260,7 +260,7 @@ export default function Generator() {
         setHtml(entry.response || entry.html);
       } else {
         // If HTML is not in the entry, fetch it from the server
-        const response = await fetch(`http://localhost:8000/history/${entry.id}/html`);
+        const response = await fetch(`http://localhost:8000/api/v1/history/${entry.id}/html`);
         if (!response.ok) {
           throw new Error(`Failed to load HTML: ${response.statusText}`);
         }
@@ -370,7 +370,7 @@ export default function Generator() {
   async function handleDeleteEntry(entryId, event) {
     event.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/history/${entryId}`, {
+      const res = await fetch(`http://localhost:8000/api/v1/history/${entryId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -414,7 +414,7 @@ export default function Generator() {
       console.info("Starting regeneration process...");
       console.debug("Regeneration config:", config);
 
-      const response = await fetch("http://localhost:8000/generate", {
+      const response = await fetch("http://localhost:8000/api/v1/visualizations/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -517,7 +517,7 @@ export default function Generator() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch("http://localhost:8000/retrieve-similar", {
+      const response = await fetch("http://localhost:8000/api/v1/rag/retrieve-similar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

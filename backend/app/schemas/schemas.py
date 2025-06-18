@@ -281,3 +281,40 @@ class EnhancementRequest(BaseModel):
     topic: str
     subject: str
     provider: str
+
+class VisualizationCreate(BaseModel):
+    topic: str
+    subject: str
+    html_content: str
+    config: Dict[str, Any]
+
+class VisualizationResponse(BaseModel):
+    id: int
+    topic: str
+    subject: str
+    html_content: str
+    config: Dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+class RetrieveSimilarResponse(BaseModel):
+    results: List[Dict[str, Any]]
+
+class GoldStandardCreate(BaseModel):
+    html: str
+    config: Dict[str, Any]
+    metadata: Dict[str, Any] = None
+
+class GoldStandardUpdate(BaseModel):
+    html: str = ""
+    metadata: Dict[str, Any]
+
+class GoldStandardResponse(BaseModel):
+    id: int
+    metadata: Dict[str, Any]
+    distance: float = None
+    html: str = None
+
+class HtmlAnalysisRequest(BaseModel):
+    html: str
+    provider: str = "openai"  # Default to OpenAI

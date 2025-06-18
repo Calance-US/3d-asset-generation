@@ -179,7 +179,7 @@ function Admin() {
   const loadPrompts = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/api/v1/admin/prompts");
+      const response = await fetch("http://localhost:8000/api/v1/prompt");
       if (!response.ok) {
         throw new Error(`Failed to load prompts: ${response.statusText}`);
       }
@@ -364,67 +364,6 @@ function Admin() {
         setIsPreviewVisible(true);
       };
       reader.readAsText(file);
-    }
-  };
-
-  const analyzeHtml = async () => {
-    if (!newGoldStandard.html) {
-      toast.error('Please upload an HTML file first');
-      return;
-    }
-
-    try {
-      setAnalyzing(true);
-      const response = await fetch('http://localhost:8000/api/v1/gold-standards/analyze', {
-        method: 'POST',
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          html: newGoldStandard.html
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to analyze HTML');
-      }
-
-      const data = await response.json();
-      
-      // Update the gold standard with extracted information
-      setNewGoldStandard(prev => ({
-        ...prev,
-        metadata: {
-          ...prev.metadata,
-          topic: data.topic_name || prev.metadata.topic
-        },
-        config: {
-          ...data,
-          three_js_url: "https://esm.sh/three@0.155.0",
-          orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
-          camera_controls: "OrbitControls",
-          curve_points: [{ x: 0, y: 0, z: 0 }],
-          animation_speed: 1.0,
-          tts_language: "en-US",
-          tts_rate: 1.0,
-          tts_pitch: 1.0,
-          renderer: {
-            antialias: data.renderer?.antialias ?? true,
-            shadowMapEnabled: data.renderer?.shadowMapEnabled ?? true,
-            shadowMapType: data.renderer?.shadowMapType || "PCFSoftShadowMap",
-            outputColorSpace: data.renderer?.outputColorSpace || "SRGBColorSpace",
-            toneMapping: data.renderer?.toneMapping || "ACESFilmicToneMapping",
-            toneMappingExposure: data.renderer?.toneMappingExposure ?? 1.0
-          }
-        }
-      }));
-
-      toast.success('HTML analyzed successfully');
-    } catch (err) {
-      console.error('Error analyzing HTML:', err);
-      toast.error('Failed to analyze HTML');
-    } finally {
-      setAnalyzing(false);
     }
   };
 

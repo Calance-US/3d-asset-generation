@@ -10,6 +10,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from sqlalchemy.orm import Session
 from app.models import SnippetMetadata
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +90,8 @@ class VectorStore:
         """Compute cosine similarity between two embeddings."""
         return float(np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2)))
 
-# Global vector store instance
-_vector_store = VectorStore(dim=settings.VECTOR_STORE_DIMENSION)
-
+@lru_cache(maxsize=1)
 def get_vector_store() -> VectorStore:
     """Get the global vector store instance."""
-    return _vector_store 
+    _vector_store = VectorStore(dim=settings.VECTOR_STORE_DIMENSION)
+    return _vector_store

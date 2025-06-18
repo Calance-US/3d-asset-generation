@@ -1,49 +1,32 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
-from typing import List, Dict, Any
-from pydantic import BaseModel
-from app.services.rag import get_rag_service, get_vector_store, get_metadata_service
-from app.config.settings import settings
-from app.schemas.schemas import EnhancedPromptResponse, EnhancedConfigSchema, SnippetSchema, SnippetType
-from app.utils import create_embedding_text, coerce_to_schema
-from openai import AsyncOpenAI
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-import aiohttp
-import json
 import logging
-import asyncio
-from app.models import GoldStandardUploadStatus
-from app.database.db_config import SessionLocal, get_db
-from sqlalchemy.orm import Session
-import uuid
-import re
+import json
 import hashlib
+import uuid
 from datetime import datetime
 import traceback
+import asyncio
+from typing import List, Dict, Any
+
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
+from sqlalchemy.orm import Session
+from app.models import GoldStandardUploadStatus, SnippetMetadata
+from app.database.db_config import SessionLocal, get_db
+from app.config.settings import settings
+from app.schemas.schemas import (
+    EnhancedPromptResponse, EnhancedConfigSchema, SnippetSchema, SnippetType,
+    GoldStandardCreate, GoldStandardUpdate, GoldStandardResponse, HtmlAnalysisRequest
+)
+from app.services.rag import get_rag_service, get_vector_store, get_metadata_service
 from app.services.rag.embedding_service import EmbeddingService
+from app.utils import (
+    create_embedding_text, coerce_to_schema, build_gold_standard_prompt,
+    normalize_snippet_types, process_with_retry, process_file
+)
 from app.utils.embedding_utils import build_embedding_text_from_config
-from app.models import SnippetMetadata
+from app.utils.html_utils import analyze_html
+from app.utils.coerce_utils import coerce_to_schema
 
 router = APIRouter()
-
-class GoldStandardCreate(BaseModel):
-    html: str
-    config: Dict[str, Any]
-    metadata: Dict[str, Any] = None
-
-class GoldStandardUpdate(BaseModel):
-    html: str = ""
-    metadata: Dict[str, Any]
-
-class GoldStandardResponse(BaseModel):
-    id: int
-    metadata: Dict[str, Any]
-    distance: float = None
-    html: str = None
-
-class HtmlAnalysisRequest(BaseModel):
-    html: str
-    provider: str = "openai"  # Default to OpenAI
 
 @router.post("/")
 async def create_gold_standards(
@@ -103,186 +86,6 @@ def get_gold_standard_upload_status(upload_id: str):
     }
     db.close()
     return result
-
-def build_gold_standard_prompt(html_content: str) -> str:
-    schema_json = json.dumps(EnhancedConfigSchema.model_json_schema(), indent=2)
-    prompt = settings.GOLD_STANDARD_ANALYSIS_PROMPT.format(
-        json_schema=schema_json,
-        html_content=html_content
-    )
-    return prompt
-
-def normalize_snippet_types(snippets):
-    """Ensure all snippets are dicts and snippet_type is valid, else set to 'miscellaneous'."""
-    allowed_types = {e.value for e in SnippetType}
-    normalized = []
-    for snippet in snippets:
-        # Convert to dict if it's a Pydantic model
-        if hasattr(snippet, 'model_dump'):
-            snippet = snippet.model_dump(mode='python', by_alias=True)
-        # Map invalid snippet_type to 'miscellaneous'
-        if 'snippet_type' in snippet and snippet['snippet_type'] not in allowed_types:
-            snippet['snippet_type'] = 'miscellaneous'
-        normalized.append(snippet)
-    return normalized
-
-@router.post("/analyze", response_model=EnhancedPromptResponse)
-async def analyze_html(request: HtmlAnalysisRequest):
-    """Analyze HTML content and extract configuration and topic."""
-    try:
-        # Create a prompt for the LLM to analyze the HTML
-        analysis_prompt = build_gold_standard_prompt(request.html)
-
-        # Initialize OpenAI client if API key is available
-        if settings.OPENAI_API_KEY:
-            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        else:
-            client = None
-            logging.warning("OpenAI API key not found")
-
-        # Initialize Google Gemini client if API key is available
-        if settings.GOOGLE_API_KEY:
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            gemini_model = genai.GenerativeModel(settings.GEMINI_MODEL)
-        else:
-            gemini_model = None
-            logging.warning("Google API key not found")
-
-        generated_text = None
-
-        if request.provider == "openai":
-            if not client:
-                raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-
-            response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=[
-                    {"role": "user", "content": analysis_prompt}
-                ],
-                temperature=0.7
-            )
-
-            generated_text = response.choices[0].message.content
-
-        elif request.provider == "ollama":
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{settings.OLLAMA_BASE_URL}/api/generate",
-                    json={
-                        "model": settings.OLLAMA_MODEL,
-                        "prompt": analysis_prompt,
-                        "stream": False
-                    }
-                ) as response:
-                    if response.status != 200:
-                        raise HTTPException(status_code=500, detail="Failed to generate with Ollama")
-
-                    result = await response.json()
-                    generated_text = result.get("response", "")
-
-        elif request.provider == "gemini":
-            if not gemini_model:
-                raise HTTPException(status_code=400, detail="Google API key not configured")
-
-            response = gemini_model.generate_content(
-                analysis_prompt,
-                safety_settings={
-                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-                }
-            )
-
-            generated_text = response.text
-
-        else:
-            raise HTTPException(status_code=400, detail="Invalid provider specified")
-
-        if not generated_text:
-            raise HTTPException(status_code=500, detail="No response from LLM")
-
-        # Log the raw LLM response
-        logging.info("Raw LLM response:", extra={
-            "action": "analyze_html",
-            "provider": request.provider,
-            "response": generated_text
-        })
-
-        # Clean the response to ensure it's valid JSON
-        try:
-            # Remove any markdown code block markers
-            cleaned_text = generated_text.replace("```json", "").replace("```", "").strip()
-            # Try to find the first { and last }
-            start_idx = cleaned_text.find("{")
-            end_idx = cleaned_text.rfind("}") + 1
-            if start_idx >= 0 and end_idx > start_idx:
-                cleaned_text = cleaned_text[start_idx:end_idx]
-
-            # Log the cleaned response
-            logging.info("Cleaned LLM response:", extra={
-                "action": "analyze_html",
-                "provider": request.provider,
-                "response": cleaned_text
-            })
-
-            # Validate JSON structure
-            enhanced_config = json.loads(cleaned_text)
-            # Normalize snippet types before any validation
-            if 'snippets' in enhanced_config:
-                enhanced_config['snippets'] = normalize_snippet_types(enhanced_config['snippets'])
-            
-            # Log the parsed configuration
-            logging.info("Parsed configuration:", extra={
-                "action": "analyze_html",
-                "provider": request.provider,
-                "config": json.dumps(enhanced_config, indent=2)
-            })
-
-            # Validate required fields
-            required_fields = [
-                "topic_name", "key_concepts", "education_level", "learning_objectives",
-                "interactive_features", "components", "materials", "lights",
-                "interactive_description", "animated_elements", "intro_narration_texts", 
-                "supporting_narration_texts", "scene_description", "snippets"
-            ]
-            missing_fields = [field for field in required_fields if field not in enhanced_config]
-            if missing_fields:
-                raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-
-            # Validate snippets structure
-            if not enhanced_config.get("snippets"):
-                raise ValueError("Response must include at least one snippet")
-                
-            for snippet in enhanced_config.get("snippets", []):
-                snippet_fields = ["snippet_type", "summary", "embedding_text", "html_snippet"]
-                missing_snippet_fields = [field for field in snippet_fields if field not in snippet]
-                if missing_snippet_fields:
-                    raise ValueError(f"Missing required snippet fields: {', '.join(missing_snippet_fields)}")
-                
-                # No need to raise error for invalid snippet_type, as normalization guarantees validity
-
-            # Clamp light intensity values to 1.0 before schema validation
-            if 'lights' in enhanced_config:
-                for light in enhanced_config['lights']:
-                    if 'intensity' in light and isinstance(light['intensity'], (int, float)):
-                        if light['intensity'] > 1.0:
-                            light['intensity'] = 1.0
-
-            return EnhancedPromptResponse(**enhanced_config)
-
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse LLM response as JSON: {str(e)}")
-            logging.error(f"Raw response: {generated_text}")
-            raise HTTPException(status_code=500, detail=f"Failed to parse LLM response as JSON: {str(e)}")
-
-    except Exception as e:
-        logging.error("Error analyzing HTML", extra={
-            "action": "analyze_html",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/search", response_model=List[GoldStandardResponse])
 async def search_gold_standards(
@@ -457,132 +260,4 @@ async def delete_gold_standard(
         raise HTTPException(
             status_code=500,
             detail=f"Error deleting gold standard: {str(e)}"
-        )
-
-async def process_with_retry(file: UploadFile, upload_id: str, max_retries: int = 3) -> Dict[str, Any]:
-    """Process a file with retry logic."""
-    for attempt in range(max_retries):
-        try:
-            return await process_file(file, upload_id)
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            logging.warning(f"Retry {attempt + 1}/{max_retries} for file {file.filename}: {str(e)}")
-            await asyncio.sleep(2 ** attempt)  # Exponential backoff
-
-async def process_file(file: UploadFile, upload_id: str) -> Dict[str, Any]:
-    """Process a single file."""
-    file_result = {"filename": file.filename, "status": "pending", "snippets": [], "error": None}
-    db = SessionLocal()
-    try:
-        html = (await file.read()).decode("utf-8")
-        class DummyRequest:
-            def __init__(self, html):
-                self.html = html
-                self.provider = "openai"
-        try:
-            # Get enhanced config from LLM
-            enhanced_config = await analyze_html(DummyRequest(html))
-            # Convert to plain dict (bulletproof) if it's a Pydantic model
-            import json as _json
-            if hasattr(enhanced_config, 'model_dump_json'):
-                enhanced_config_dict = _json.loads(enhanced_config.model_dump_json())
-            elif hasattr(enhanced_config, 'model_dump'):
-                enhanced_config_dict = enhanced_config.model_dump(mode='python', by_alias=True)
-            else:
-                enhanced_config_dict = enhanced_config
-            # Normalize snippet types before coercion/validation
-            if 'snippets' in enhanced_config_dict:
-                enhanced_config_dict['snippets'] = normalize_snippet_types(enhanced_config_dict['snippets'])
-            # Coerce and validate all fields using the schema
-            enhanced_config_dict = coerce_to_schema(enhanced_config_dict, EnhancedConfigSchema)
-            # Validate against schema
-            try:
-                validated_config = EnhancedConfigSchema(**enhanced_config_dict)
-            except Exception as e:
-                raise ValueError(f"Invalid config schema: {str(e)}")
-            file_result["status"] = "success"
-            file_result["config"] = validated_config.dict()
-            # Initialize vector_store at the start
-            vector_store = get_vector_store()
-            # Process snippets
-            embedding_text = build_embedding_text_from_config(validated_config.dict())
-            embedding = EmbeddingService.generate_embedding(embedding_text)
-            snippet_results = []
-            for snippet in validated_config.snippets:
-                snippet_result = {
-                    "snippet_type": snippet.snippet_type,
-                    "summary": snippet.summary,
-                    "status": "pending",
-                    "error": None
-                }
-                try:
-                    # Generate hash for deduplication
-                    snippet_hash = hashlib.sha256(snippet.html_snippet.encode()).hexdigest()
-                    # Check for duplicates
-                    metadata_service = get_metadata_service()
-                    existing = await metadata_service.get_by_hash(snippet_hash)
-                    # Patch: Also check vector store for snippet_hash
-                    in_vector_store = vector_store.has_snippet_hash(snippet_hash, db)
-                    if existing or in_vector_store:
-                        # Update existing snippet in metadata store if present
-                        if existing:
-                            await metadata_service.update_snippet(snippet_hash, {
-                                "updated_at": datetime.utcnow(),
-                                "retry_count": existing.retry_count + 1
-                            })
-                        snippet_result["status"] = "duplicate"
-                        snippet_result["message"] = "Snippet already exists"
-                        snippet_results.append(snippet_result)
-                        continue
-                    # Store snippet metadata
-                    snippet_metadata = {
-                        "id": str(uuid.uuid4()),  # Ensure id is a string
-                        "snippet_hash": snippet_hash,
-                        "snippet_type": snippet.snippet_type.value if hasattr(snippet.snippet_type, "value") else str(snippet.snippet_type),
-                        "summary": snippet.summary,
-                        "embedding_text": embedding_text,
-                        "html_snippet": snippet.html_snippet,
-                        "filename": file.filename,
-                        "upload_id": str(upload_id),  # Ensure upload_id is a string
-                        "llm_version": settings.OPENAI_MODEL,
-                        "validation_status": "pending",
-                        "validation_errors": [],
-                        "retry_count": 0,
-                        "topic": validated_config.topic_name,
-                        "key_concepts": validated_config.key_concepts,
-                        "education_level": validated_config.education_level.value if hasattr(validated_config.education_level, "value") else str(validated_config.education_level),
-                        "learning_objectives": validated_config.learning_objectives
-                    }
-                    # Generate a new unique faiss_id (max+1 for demo, use sequence in prod)
-                    max_faiss_id = db.query(SnippetMetadata.faiss_id).order_by(SnippetMetadata.faiss_id.desc()).first()
-                    faiss_id = (max_faiss_id[0] if max_faiss_id and max_faiss_id[0] is not None else 0) + 1
-                    # Add to metadata store with faiss_id
-                    snippet_obj = await metadata_service.add_snippet(snippet_metadata, faiss_id=faiss_id)
-                    # Add to vector store
-                    vector_store.add_visualization(embedding, faiss_id)
-                    snippet_result["status"] = "success"
-                except Exception as e:
-                    snippet_result["status"] = "error"
-                    snippet_result["error"] = str(e)
-                snippet_results.append(snippet_result)
-            file_result["snippets"] = snippet_results
-            # Save vector store
-            vector_store.save(settings.VECTOR_STORE_PATH)
-        except Exception as e:
-            file_result["status"] = "error"
-            if isinstance(e, HTTPException):
-                file_result["error"] = f"HTTPException: {getattr(e, 'detail', '')}"
-            else:
-                file_result["error"] = f"{type(e).__name__}: {str(e)}"
-            logging.error(f"Error processing file {file.filename}: {e}\n{traceback.format_exc()}")
-    except Exception as e:
-        file_result["status"] = "error"
-        if isinstance(e, HTTPException):
-            file_result["error"] = f"HTTPException: {getattr(e, 'detail', '')}"
-        else:
-            file_result["error"] = f"{type(e).__name__}: {str(e)}"
-        logging.error(f"Error reading file {file.filename}: {e}\n{traceback.format_exc()}")
-    finally:
-        db.close()
-    return file_result 
+        ) 
