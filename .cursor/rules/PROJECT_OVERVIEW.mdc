@@ -7,6 +7,102 @@ alwaysApply: true
 
 This project is a 3D educational visualization platform with a React frontend and FastAPI backend. The application allows users to generate, save, and interact with 3D visualizations for educational purposes.
 
+## Project File Structure
+```
+.
+├── backend
+│   ├── alembic.ini
+│   ├── app
+│   │   ├── api
+│   │   │   ├── api.py
+│   │   │   └── endpoints
+│   │   │       ├── admin.py
+│   │   │       ├── gold_standards.py
+│   │   │       ├── history.py
+│   │   │       ├── models.py
+│   │   │       ├── prompt.py
+│   │   │       ├── rag.py
+│   │   │       └── visualizations.py
+│   │   ├── config
+│   │   │   ├── logging_config.py
+│   │   │   └── settings.py
+│   │   ├── database
+│   │   │   ├── database.py
+│   │   │   └── db_config.py
+│   │   ├── models.py
+│   │   ├── prompts
+│   │   │   └── template.prompt.txt
+│   │   ├── schemas
+│   │   │   ├── schemas.py
+│   │   │   └── visualization.py
+│   │   ├── services
+│   │   │   ├── metadata_service.py
+│   │   │   ├── model_repository.py
+│   │   │   ├── prompt_generator.py
+│   │   │   ├── prompt_selector.py
+│   │   │   └── rag
+│   │   │       ├── embedding_service.py
+│   │   │       ├── metadata_service.py
+│   │   │       ├── rag_service.py
+│   │   │       └── vector_store.py
+│   │   └── utils
+│   │       ├── coerce_utils.py
+│   │       ├── datetime_utils.py
+│   │       ├── embedding_utils.py
+│   │       ├── html_utils.py
+│   │       ├── prompt_utils.py
+│   │       └── snippet_utils.py
+│   ├── main.py
+│   ├── migrations
+│   │   ├── env.py
+│   │   ├── README
+│   │   ├── script.py.mako
+│   │   └── versions
+│   │       ├── 2024_03_19_0001_create_snippet_metadata_table.py
+│   │       ├── 2025_06_16_1023-e7c7d9ac9c85_add_gold_standard_upload_status_table.py
+│   │       ├── 2025_06_16_1047-b264deffc916_add_result_column_to_gold_standard_.py
+│   │       ├── 2025_06_16_1050_recreate_gold_standard_upload_status.py
+│   │       ├── 2025_06_17_0001_create_faiss_id_metadata_link.py
+│   │       ├── 2025_06_18_0001_autoincrement_prompt_id.py
+│   │       ├── 2025_06_18_0100_prompts_id_identity.py
+│   │       ├── 2025_06_18_0200_visualizations_id_identity.py
+│   │       ├── 74c94aab2a18_initial_migration.py
+│   │       ├── add_string_id_to_history.py
+│   │       └── add_visualization_tags.py
+│   ├── pyproject.toml
+│   └── uv.lock
+├── FILE_STRUCTURE.md
+├── frontend
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public
+│   │   ├── favicon.ico
+│   │   ├── index.html
+│   │   ├── logo192.png
+│   │   ├── logo512.png
+│   │   └── manifest.json
+│   ├── src
+│   │   ├── App.jsx
+│   │   ├── components
+│   │   │   ├── admin
+│   │   │   │   └── VectorStoreDashboard.jsx
+│   │   │   ├── Admin.jsx
+│   │   │   ├── Generator.jsx
+│   │   │   └── PromptConfig.jsx
+│   │   ├── index.css
+│   │   ├── index.js
+│   │   ├── lib
+│   │   │   └── utils.js
+│   │   └── pages
+│   │       └── AdminPage.jsx
+│   ├── tailwind.config.js
+│   └── vite.config.js
+├── pyrightconfig.json
+└── README.md
+```
+
 ## Key Technologies
 
 ### Backend Technologies
@@ -22,13 +118,34 @@ This project is a 3D educational visualization platform with a React frontend an
   - NumPy (1.24.3): Numerical computing
   - BeautifulSoup4 (4.12.2): HTML parsing
 - **Infrastructure**:
-  - Redis (5.0.1): Caching and session management
+  - Redis (5.0.1): Caching and session management (see below for setup)
   - Boto3 (1.28.64): AWS service integration
   - aiohttp (3.9.1): Async HTTP client/server
 - **Configuration & Logging**:
-  - python-dotenv (1.0.0): Environment variable management
+  - python-dotenv (1.0.0): Environment variable management (see below for .env setup)
   - pydantic-settings (2.1.0): Settings management
   - python-json-logger (2.0.7): JSON-formatted logging
+
+#### External Services Setup
+- **.env file:**
+  - Copy `.env.example` to `.env` in the `backend/` directory and fill in required values (API keys, database URL, etc).
+- **Database:**
+  - By default, uses SQLite (`app.db`).
+  - To use Postgres or another DB, set `DATABASE_URL` in `.env` (e.g., `postgresql://user:pass@localhost:5432/dbname`).
+  - For Postgres (Docker):
+    ```bash
+    docker run --name pg-3dwebapp -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=3dwebapp -p 5432:5432 -d postgres:15
+    # Then set DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/3dwebapp in .env
+    ```
+- **Redis:**
+  - Required for caching/session (default: `redis://localhost:6379`).
+  - Run with Docker:
+    ```bash
+    docker run --name redis-3dwebapp -p 6379:6379 -d redis:7
+    ```
+  - Or install locally: https://redis.io/download
+- **AI Provider Keys:**
+  - Set your OpenAI, Google, Ollama, and Gemini API keys/URLs in `.env` as needed.
 
 ### Frontend Technologies
 - **Core Framework**:

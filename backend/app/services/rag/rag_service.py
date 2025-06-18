@@ -83,12 +83,8 @@ class RAGService:
             raise
 
     async def save_vector_store(self) -> None:
-        """Save the vector store to disk."""
-        try:
-            self.vector_store.save(settings.VECTOR_STORE_PATH)
-        except Exception as e:
-            logger.error(f"Error saving vector store: {str(e)}")
-            raise
+        """Save the vector store to disk (no-op for Qdrant)."""
+        logger.info("Qdrant handles vector persistence automatically; save is a no-op.")
 
 def get_rag_service(
     vector_store: VectorStore = Depends(get_vector_store),

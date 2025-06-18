@@ -135,8 +135,6 @@ async def process_file(file: UploadFile, upload_id: str) -> Dict[str, Any]:
                     snippet_result["error"] = str(e)
                 snippet_results.append(snippet_result)
             file_result["snippets"] = snippet_results
-            # Save vector store
-            vector_store.save(settings.VECTOR_STORE_PATH)
         except Exception as e:
             file_result["status"] = "error"
             if isinstance(e, HTTPException):

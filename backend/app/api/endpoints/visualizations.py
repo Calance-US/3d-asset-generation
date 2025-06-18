@@ -283,7 +283,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                 messages=[
                     {"role": "user", "content": prompt_content}
                 ],
-                temperature=0.7
+                temperature=settings.TEMPERATURE
             )
             generated_text = response.choices[0].message.content
         elif request.provider == "ollama":
