@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -39,7 +39,6 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 const VectorStoreDashboard = () => {
   const [stats, setStats] = useState(null);
   const [vectors, setVectors] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     snippet_type: '',
@@ -56,7 +55,7 @@ const VectorStoreDashboard = () => {
     }
   };
 
-  const fetchVectors = async () => {
+  const fetchVectors = useCallback(async () => {
     try {
       const response = await axios.get(`${BASE_URL}/admin/vector-store-vectors`, {
         params: {
@@ -68,10 +67,8 @@ const VectorStoreDashboard = () => {
       setVectors(response.data);
     } catch (error) {
       console.error('Error fetching Vector Store vectors:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [page, filters]);
 
   useEffect(() => {
     fetchStats();
@@ -79,7 +76,7 @@ const VectorStoreDashboard = () => {
 
   useEffect(() => {
     fetchVectors();
-  }, [page, filters]);
+  }, [fetchVectors]);
 
   const handleFilterChange = (field) => (event) => {
     setFilters(prev => ({

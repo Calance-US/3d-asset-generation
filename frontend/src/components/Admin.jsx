@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import MdEditor from 'react-markdown-editor-lite';
-import MarkdownIt from 'markdown-it';
-import 'react-markdown-editor-lite/lib/index.css';
 import { toast } from 'react-toastify';
 import VectorStoreDashboard from './admin/VectorStoreDashboard';
 import { Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
@@ -10,94 +7,16 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { BASE_URL } from '../lib/utils';
 
-// Initialize markdown parser
-const mdParser = new MarkdownIt();
-
-// Global styles for markdown content
-const markdownStyles = `
-  .markdown-content {
-    color: #d1d5db;
-  }
-  .markdown-content h1,
-  .markdown-content h2,
-  .markdown-content h3,
-  .markdown-content h4,
-  .markdown-content h5,
-  .markdown-content h6 {
-    color: #ffffff;
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-  }
-  .markdown-content p {
-    margin-bottom: 1em;
-  }
-  .markdown-content ul,
-  .markdown-content ol {
-    margin-left: 1.5em;
-    margin-bottom: 1em;
-  }
-  .markdown-content li {
-    margin-bottom: 0.5em;
-  }
-  .markdown-content code {
-    background-color: #374151;
-    padding: 0.2em 0.4em;
-    border-radius: 0.25em;
-    font-family: monospace;
-  }
-  .markdown-content pre {
-    background-color: #374151;
-    padding: 1em;
-    border-radius: 0.5em;
-    overflow-x: auto;
-    margin-bottom: 1em;
-  }
-  .markdown-content pre code {
-    background-color: transparent;
-    padding: 0;
-  }
-  .markdown-content blockquote {
-    border-left: 4px solid #4b5563;
-    padding-left: 1em;
-    margin-left: 0;
-    margin-bottom: 1em;
-    color: #9ca3af;
-  }
-  .markdown-content a {
-    color: #60a5fa;
-    text-decoration: underline;
-  }
-  .markdown-content a:hover {
-    color: #93c5fd;
-  }
-  .markdown-content table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-bottom: 1em;
-  }
-  .markdown-content th,
-  .markdown-content td {
-    border: 1px solid #4b5563;
-    padding: 0.5em;
-    text-align: left;
-  }
-  .markdown-content th {
-    background-color: #374151;
-  }
-`;
-
 function Admin() {
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(null);
   const [goldStandards, setGoldStandards] = useState([]);
   const [goldStandardsLoading, setGoldStandardsLoading] = useState(true);
   const [goldStandardsError, setGoldStandardsError] = useState(null);
   const [multiUploadFiles, setMultiUploadFiles] = useState([]);
-  const [multiUploadId, setMultiUploadId] = useState(null);
   const [multiUploadStatus, setMultiUploadStatus] = useState(null);
   const [multiUploadPolling, setMultiUploadPolling] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
@@ -128,54 +47,12 @@ function Admin() {
     retry_count: 0,
     tags: []
   });
-  const [newGoldStandard, setNewGoldStandard] = useState({
-    html: '',
-    config: {},
-    metadata: {
-      topic: '',
-      subject: '',
-      tags: []
-    }
-  });
-  const [previewHtml, setPreviewHtml] = useState('');
-  const [previewConfig, setPreviewConfig] = useState({});
-  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-  const iframeRef = useRef(null);
   const navigate = useNavigate();
-  const [analyzing, setAnalyzing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
 
   useEffect(() => {
     loadPrompts();
-    fetchStats();
     fetchGoldStandards();
   }, []);
-
-  const fetchStats = async () => {
-    try {
-      setStatsLoading(true);
-      const response = await fetch(`${BASE_URL}/admin/vector-store-stats`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch generation stats');
-      }
-      const data = await response.json();
-      setStats(data);
-    } catch (err) {
-      setStatsError(err.message);
-    } finally {
-      setStatsLoading(false);
-    }
-  };
-
-  const formatTime = (seconds) => {
-    if (seconds < 60) {
-      return `${seconds.toFixed(2)}s`;
-    }
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}m ${remainingSeconds.toFixed(2)}s`;
-  };
 
   const loadPrompts = async () => {
     try {
@@ -291,163 +168,6 @@ function Admin() {
     setPage(0);
   };
 
-  const handleAddGoldStandard = async () => {
-    try {
-      const formData = new FormData();
-      const htmlBlob = new Blob([newGoldStandard.html], { type: 'text/html' });
-      formData.append('files', htmlBlob, 'visualization.html');
-
-      const response = await fetch(`${BASE_URL}/gold-standards`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add gold standard');
-      }
-
-      const data = await response.json();
-      if (data.upload_id) {
-        setMultiUploadId(data.upload_id);
-        setMultiUploadPolling(true);
-        toast.info('Upload started. Tracking status...');
-      } else {
-        toast.error('Failed to start upload.');
-      }
-
-      setNewGoldStandard({
-        html: '',
-        config: {},
-        metadata: {
-          topic: '',
-          subject: '',
-          tags: []
-        }
-      });
-    } catch (err) {
-      toast.error('Failed to add gold standard');
-    }
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${BASE_URL}/gold-standards/search?query=${encodeURIComponent(searchQuery)}`);
-      if (!response.ok) {
-        throw new Error('Failed to search gold standards');
-      }
-      const data = await response.json();
-      setSearchResults(data);
-      setError(null);
-    } catch (err) {
-      setError('Error searching gold standards: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target.result;
-        setNewGoldStandard(prev => ({
-          ...prev,
-          html: content
-        }));
-        setPreviewHtml(content);
-        setIsPreviewVisible(true);
-      };
-      reader.readAsText(file);
-    }
-  };
-
-  const handleConfigChange = (e) => {
-    try {
-      const config = JSON.parse(e.target.value);
-      setNewGoldStandard(prev => ({
-        ...prev,
-        config
-      }));
-    } catch (err) {
-      // Invalid JSON, ignore
-    }
-  };
-
-  const handleFullscreen = () => {
-    if (iframeRef.current) {
-      if (iframeRef.current.requestFullscreen) {
-        iframeRef.current.requestFullscreen();
-      } else if (iframeRef.current.webkitRequestFullscreen) {
-        iframeRef.current.webkitRequestFullscreen();
-      } else if (iframeRef.current.msRequestFullscreen) {
-        iframeRef.current.msRequestFullscreen();
-      }
-    }
-  };
-
-  // Multi-file upload handlers
-  const handleMultiFileChange = (e) => {
-    setMultiUploadFiles([...e.target.files]);
-  };
-
-  const handleMultiUpload = async () => {
-    if (!multiUploadFiles.length) {
-      toast.error('Please select at least one HTML file.');
-      return;
-    }
-    const formData = new FormData();
-    multiUploadFiles.forEach(file => formData.append('files', file));
-    try {
-      const response = await fetch(`${BASE_URL}/gold-standards/`, {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json();
-      if (data.upload_id) {
-        setMultiUploadId(data.upload_id);
-        setMultiUploadStatus('processing');
-        setMultiUploadPolling(true);
-        toast.info('Upload started. Tracking status...');
-      } else {
-        toast.error('Failed to start upload.');
-      }
-    } catch (err) {
-      toast.error('Error uploading files.');
-    }
-  };
-
-  useEffect(() => {
-    if (!multiUploadId || !multiUploadPolling) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`${BASE_URL}/gold-standards/status/${multiUploadId}`);
-        const statusData = await res.json();
-        setMultiUploadStatus(statusData);
-        if (statusData.status === 'completed' || statusData.status === 'error') {
-          setMultiUploadPolling(false);
-          clearInterval(interval);
-          if (statusData.status === 'completed') {
-            toast.success('Gold standards upload completed!');
-          } else {
-            toast.error('Gold standards upload failed.');
-          }
-        }
-      } catch (err) {
-        setMultiUploadPolling(false);
-        clearInterval(interval);
-        toast.error('Error polling upload status.');
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [multiUploadId, multiUploadPolling]);
-
   const handleDelete = async (index) => {
     if (!window.confirm('Are you sure you want to delete this gold standard?')) {
       return;
@@ -470,13 +190,7 @@ function Admin() {
     }
   };
 
-  const truncateContent = (content) => {
-    // Remove markdown syntax for preview
-    const plainText = content.replace(/[#*`_~[]]/g, '');
-    return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
-  };
-
-  if (loading || statsLoading) {
+  if (loading || goldStandardsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-white">Loading...</div>
@@ -484,10 +198,10 @@ function Admin() {
     );
   }
 
-  if (error || statsError) {
+  if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
-        <div className="text-red-500">{error || statsError}</div>
+        <div className="text-red-500">{error}</div>
       </div>
     );
   }
@@ -588,7 +302,6 @@ function Admin() {
                         }
 
                         const data = await response.json();
-                        setMultiUploadId(data.upload_id);
                         setMultiUploadStatus('processing');
                         setMultiUploadPolling(true);
 
@@ -607,7 +320,6 @@ function Admin() {
                               clearInterval(pollInterval);
                               setMultiUploadPolling(false);
                               setMultiUploadFiles([]);
-                              setMultiUploadId(null);
                               
                               if (statusData.status === 'completed') {
                                 toast.success('Files uploaded successfully');
