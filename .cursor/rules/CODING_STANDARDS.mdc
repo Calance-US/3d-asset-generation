@@ -3,50 +3,78 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Rules for enforcing coding standards
+# 🟢 General Principles
 
-[language.python]
-version = "3.11"
+- **Consistency and clarity** are prioritized over individual style.
+- All code should be easily understandable and maintainable by any team member.
+- Use descriptive variable, function, and class names.
+- Add clear, Google-style docstrings for all public functions, methods, and classes.
+- Write self-documenting code; minimize redundant comments.
 
-# Linting rules
-lint:
-  # PEP8 enforcement (using pycodestyle or flake8)
-  pep8: true
+---
 
-  # Import sorting enforcement (e.g., isort)
-  sort-imports: true
+# 🟢 Backend (Python, FastAPI)
 
-  # Docstring style enforcement - Google style
-  docstring-style:
-    style: google
-    required: true
+- Use `async def` for all FastAPI endpoints and async DB calls.
+- **Type annotations** are required for all functions and variables.
+- Use Pydantic V2 models for request/response schemas, with Google-style docstrings.
+- SQLAlchemy models must have explicit column types, relationships, and `__tablename__`.
+- Use Alembic for all database migrations; no manual DB changes.
+- Adhere strictly to [PEP8](https://peps.python.org/pep-0008/) (max line length: 79).
+- **Imports:**  
+  - Group by: standard library, third-party, then local modules.
+  - Sort each group alphabetically.
+- **Logging:**  
+  - Prefer structured, JSON logs (`logging.json` or similar).
+  - No print statements in production code.
+- **Configuration:**  
+  - Always load environment variables from `.env` via Pydantic settings (BaseSettings).
+  - No hardcoded secrets or config values in code.
 
-  # FastAPI-specific rules (some semantic checks)
-  fastapi:
-    require-type-annotations: true
-    require-response-models: true
-    use-async-def: true
+---
 
-  # Pydantic v2-specific rules
-  pydantic:
-    version: 2
-    require-model-config: true
-    require-validators: false
-    disallow-orm_mode-without-config: true
+# 🟢 Frontend (React, JS/TS)
 
-  # SQLAlchemy-specific rules
-  sqlalchemy:
-    require-explicit-declarations: true
-    enforce-relationship-use: true
+- Use **functional React components** and hooks exclusively.
+- All API URLs should use the utility-provided `BASE_URL` (environment-based).
+- **Styling:**  
+  - Tailwind CSS is the primary styling framework; use utility classes, not custom CSS unless required.
+  - Prefer Headless UI and Material-UI components.
+- **Code style:**  
+  - Use ESLint and Prettier (config in repo).
+  - No inline styles unless absolutely necessary.
+  - All docstrings/comments should use Google style (for functions, major logic, and new components).
+- **Components:**  
+  - Place all new components in the appropriate `src/components/` or `src/pages/` directory.
+  - All component props must have prop-types or TypeScript types.
+- **State management:**  
+  - Use local state with hooks; introduce global state only if justified.
+- **Testing:**  
+  - Add unit tests for all new logic-heavy components and utility functions.
 
-# Additional style rules
+---
 
-[style]
-max-line-length = 79
-indent-size = 4
-use-tabs = false
+# 🟢 Documentation & Comments
 
-[imports]
-sort-order = ["stdlib", "thirdparty", "local"]
-case-sensitive = false
-separate-by-type = true
+- All exported functions/classes require a Google-style docstring.
+- Prefer docstrings to inline comments unless context-specific.
+- Update README and in-code docs when APIs, models, or interfaces change.
+
+---
+
+# 🟢 LLM/Agent Guidance
+
+- When generating code, **always follow these standards** unless the user requests otherwise.
+- If multiple conventions are possible, prefer the more widely adopted or project-specific one (see above).
+- Add rationale comments if a coding choice is non-obvious or project-specific.
+- If uncertain about a standard, reference the conventions outlined above.
+
+---
+
+# 🟢 Quick Reference
+
+- **Backend:** Python 3.11+, FastAPI, SQLAlchemy, Pydantic v2, Alembic, PEP8, Google docstrings.
+- **Frontend:** React, functional components, hooks, Tailwind CSS, ESLint, Prettier, Google docstrings/comments.
+
+---
+

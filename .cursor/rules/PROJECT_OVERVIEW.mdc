@@ -3,9 +3,59 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Project Structure and Key Responsibilities
+---
+description: |
+  Comprehensive context for the 3D Educational Visualization Platform project. Provides high-level purpose, tech stack, key conventions, and full project structure for agents and LLMs.
+alwaysApply: true
+---
 
-This project is a 3D educational visualization platform with a React frontend and FastAPI backend. The application allows users to generate, save, and interact with 3D visualizations for educational purposes.
+## 🟢 Project Purpose
+
+This project is a 3D educational visualization platform designed to help users generate, save, and interact with interactive 3D visualizations of scientific and educational concepts. By leveraging AI-powered prompt generation and retrieval-augmented generation (RAG), the platform enables educators and learners to create dynamic, customizable 3D scenes from natural language descriptions, manage a library of visualizations, and explore educational content in an engaging, visual format. The system supports history tracking, tagging, and advanced search, making it a powerful tool for both teaching and self-guided learning.
+
+---
+
+## 🟢 Architectural / Stack Highlights
+
+- **Backend:**  
+  - Built with FastAPI for high-performance, async REST APIs.
+  - Uses SQLAlchemy ORM for database operations and Alembic for migrations.
+  - Vector search and similarity retrieval are powered by Qdrant, a production-grade vector database.
+  - Embedding generation leverages Sentence Transformers and can integrate with multiple AI providers (OpenAI, Google, Ollama, Gemini).
+  - Modular service and API layer, with clear separation of business logic, data access, and API endpoints.
+  - All configuration is managed via environment variables and `.env` files, with pydantic-based settings.
+  - **All backend Python dependencies and virtual environments are managed using the [uv package manager by Astral](https://docs.astral.sh/uv/getting-started/installation/). Do not use pip, pipx, or poetry. This ensures ultra-fast installs, consistent dependency resolution, and cross-platform compatibility (including Apple Silicon Macs).**
+
+- **Frontend:**  
+  - Built with React (using hooks and functional components).
+  - UI components use Material-UI, Tailwind CSS, and Headless UI for a modern, responsive design.
+  - State management is handled locally with React hooks.
+  - API calls are abstracted to use a configurable base URL, supporting different environments.
+  - Includes admin and prompt configuration panels for advanced users.
+
+---
+
+## 🟢 Key Conventions
+
+### Backend
+- All FastAPI endpoints must use `async def` and type annotations.
+- Pydantic V2 models (schemas) must use Google-style docstrings and include model config.
+- SQLAlchemy models require explicit declarations and relationships.
+- Imports must be sorted and grouped by standard library, third-party, and local modules.
+- All code must adhere to PEP8 and use a max line length of 79 characters.
+- Logging should use structured, JSON-formatted logs where possible.
+- Environment variables are loaded from `.env` using pydantic-settings.
+- Database migrations must be managed with Alembic.
+
+### Frontend
+- Use functional React components and hooks.
+- All API URLs must use the environment-based `BASE_URL` from a utility module.
+- Tailwind CSS is the primary styling framework, with utility classes preferred.
+- All docstrings and comments should be clear and use the Google style where applicable.
+- Use ESLint and Prettier for code style enforcement.
+- All new components should be placed in the appropriate `src/components/` or `src/pages/` subdirectory.
+
+---
 
 ## Project File Structure
 ```
@@ -71,7 +121,6 @@ This project is a 3D educational visualization platform with a React frontend an
 │   │       └── add_visualization_tags.py
 │   ├── pyproject.toml
 │   └── uv.lock
-├── FILE_STRUCTURE.md
 ├── frontend
 │   ├── index.html
 │   ├── package-lock.json
@@ -102,246 +151,3 @@ This project is a 3D educational visualization platform with a React frontend an
 ├── pyrightconfig.json
 └── README.md
 ```
-
-## Key Technologies
-
-### Backend Technologies
-- **FastAPI (0.104.1)**: Modern, fast web framework for building APIs
-- **SQLAlchemy (2.0.23)**: SQL toolkit and ORM for database operations
-- **Alembic (1.13.1)**: Database migration tool
-- **AI/ML Libraries**:
-  - OpenAI API (>=1.6.1): For AI-powered visualization generation
-  - Google Generative AI (0.3.1): Alternative AI model integration
-  - Sentence Transformers (2.2.2): For text embeddings and similarity search
-  - FAISS (1.7.4): Efficient similarity search and clustering
-- **Data Processing**:
-  - NumPy (1.24.3): Numerical computing
-  - BeautifulSoup4 (4.12.2): HTML parsing
-- **Infrastructure**:
-  - Redis (5.0.1): Caching and session management (see below for setup)
-  - Boto3 (1.28.64): AWS service integration
-  - aiohttp (3.9.1): Async HTTP client/server
-- **Configuration & Logging**:
-  - python-dotenv (1.0.0): Environment variable management (see below for .env setup)
-  - pydantic-settings (2.1.0): Settings management
-  - python-json-logger (2.0.7): JSON-formatted logging
-
-#### External Services Setup
-- **.env file:**
-  - Copy `.env.example` to `.env` in the `backend/` directory and fill in required values (API keys, database URL, etc).
-- **Database:**
-  - By default, uses SQLite (`app.db`).
-  - To use Postgres or another DB, set `DATABASE_URL` in `.env` (e.g., `postgresql://user:pass@localhost:5432/dbname`).
-  - For Postgres (Docker):
-    ```bash
-    docker run --name pg-3dwebapp -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=3dwebapp -p 5432:5432 -d postgres:15
-    # Then set DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/3dwebapp in .env
-    ```
-- **Redis:**
-  - Required for caching/session (default: `redis://localhost:6379`).
-  - Run with Docker:
-    ```bash
-    docker run --name redis-3dwebapp -p 6379:6379 -d redis:7
-    ```
-  - Or install locally: https://redis.io/download
-- **AI Provider Keys:**
-  - Set your OpenAI, Google, Ollama, and Gemini API keys/URLs in `.env` as needed.
-
-### Frontend Technologies
-- **Core Framework**:
-  - React (18.2.0): UI library
-  - React Router (7.6.1): Client-side routing
-- **UI Components**:
-  - Material-UI (@mui/material 7.1.1): Component library
-  - Headless UI (@headlessui/react 2.2.4): Unstyled, accessible components
-  - Heroicons (@heroicons/react 2.2.0): Icon set
-- **Styling**:
-  - Tailwind CSS (3.4.1): Utility-first CSS framework
-  - Emotion (@emotion/react, @emotion/styled): CSS-in-JS solution
-- **Content Editing**:
-  - React Markdown Editor Lite (1.3.4): Markdown editing
-  - markdown-it (14.1.0): Markdown parsing
-- **User Experience**:
-  - React Toastify (11.0.5): Toast notifications
-- **Development Tools**:
-  - Testing: Jest, React Testing Library
-  - Build: React Scripts
-  - PostCSS, Autoprefixer: CSS processing
-  - **Always use `uv run` to start backend Python processes (including FastAPI), not `python` or `uvicorn` directly.**
-
-## Frontend Structure
-
-### 1. `frontend/src/components/Generator.jsx` ([Generator.jsx](mdc:frontend/src/components/Generator.jsx))
-
-- **Role:** Main component for generating and managing 3D visualizations
-- **Key Responsibilities:**
-  - Handles user input for visualization generation
-  - Manages visualization configuration (components, materials, lights)
-  - Provides UI for:
-    - Subject and topic selection
-    - Configuration customization
-    - History management
-    - Library integration
-  - Implements toast notifications for user feedback
-  - Manages fullscreen visualization mode
-
-### 2. `frontend/src/components/Admin.jsx` ([Admin.jsx](mdc:frontend/src/components/Admin.jsx))
-
-- **Role:** Administrative interface for managing prompts and configurations
-- **Key Features:**
-  - Prompt template management
-  - Configuration settings
-  - System monitoring
-
-### 3. `frontend/src/components/PromptConfig.jsx` ([PromptConfig.jsx](mdc:frontend/src/components/PromptConfig.jsx))
-
-- **Role:** Manages prompt configuration and customization
-- **Key Features:**
-  - Prompt template editing
-  - Configuration parameter adjustment
-  - Template validation
-
-### 4. `frontend/src/lib/utils.js` ([utils.js](mdc:frontend/src/lib/utils.js))
-
-- **Role:** Utility functions for frontend operations
-- **Key Features:**
-  - Helper functions
-  - Common utilities
-  - Data formatting
-
-## Backend Structure
-
-### 1. `backend/main.py` ([main.py](mdc:backend/main.py))
-
-- **Role:** Main FastAPI application entry point
-- **Key Responsibilities:**
-  - API route definitions
-  - Middleware configuration (CORS, static files)
-  - Service initialization
-  - Database connection management
-  - Error handling and logging
-
-### 2. `backend/app/models.py` ([models.py](mdc:backend/app/models.py))
-
-- **Role:** SQLAlchemy database models
-- **Key Models:**
-  - `Prompt`: Stores prompt templates and configurations
-  - `Tag`: Manages categorization tags
-  - `HistoryEntry`: Tracks visualization generation history
-  - `Visualization`: Stores saved visualizations
-  - Association tables for many-to-many relationships
-
-### 3. `backend/app/services/`
-
-- **Role:** Core business logic services
-- **Key Services:**
-  - `prompt_selector.py`: Manages prompt selection and embedding
-  - `model_repository.py`: Handles model availability and selection
-  - `prompt_generator.py`: Generates prompts for visualization
-
-### 4. `backend/app/api/endpoints/`
-
-- **Role:** API endpoint implementations
-- **Key Endpoints:**
-  - `visualizations.py`: Handles visualization CRUD operations
-
-### 5. `backend/app/database/`
-
-- **Role:** Database configuration and utilities
-- **Key Components:**
-  - `database.py`: Database connection and session management
-  - `db_config.py`: Database configuration settings
-
-### 6. `backend/app/migrations/`
-
-- **Role:** Database migration management
-- **Key Files:**
-  - `versions/`: Contains Alembic migration files
-    - `74c94aab2a18_initial_migration.py`: Initial database schema
-    - `add_string_id_to_history.py`: History table ID modification
-    - `add_visualization_tags.py`: Visualization tags support
-
-### 7. `backend/app/schemas/`
-
-- **Role:** Pydantic models for request/response validation
-- **Key Files:**
-  - `schemas.py`: Common schema definitions
-  - `visualization.py`: Visualization-specific schemas
-
-### 8. `backend/app/config/`
-
-- **Role:** Application configuration
-- **Key Files:**
-  - `settings.py`: Environment and application settings
-  - `logging_config.py`: Logging configuration
-
-### 9. `backend/app/prompts/`
-
-- **Role:** Prompt template management
-- **Key Files:**
-  - `template.json`: Prompt template configuration
-  - `template.prompt.txt`: Base prompt template
-  - `template.sample.json`: Sample prompt data
-  - `embeddings/topics.npy`: Topic embeddings
-
-### 10. `backend/app/data/`
-
-- **Role:** Data storage and management
-- **Key Files:**
-  - `costs.json`: Cost tracking data
-  - `history.json`: Historical data
-
-## Key Features
-
-1. **Visualization Generation**
-   - Dynamic 3D scene creation
-   - Component customization
-   - Material and lighting configuration
-   - Animation and interaction support
-
-2. **History Management**
-   - Generation history tracking
-   - Entry retrieval and deletion
-   - Configuration persistence
-
-3. **Library Integration**
-   - Save visualizations to library
-   - Tag-based organization
-   - Search and retrieval
-
-4. **User Interface**
-   - Responsive design
-   - Interactive controls
-   - Toast notifications
-   - Fullscreen mode
-
-5. **Backend Services**
-   - RESTful API
-   - Database management
-   - Prompt generation
-   - Model selection
-
-## Development Workflow
-
-1. **Frontend Development**
-   - React components in `frontend/src/components/`
-   - State management with React hooks
-   - API integration with backend services
-   - Tailwind CSS for styling
-
-2. **Backend Development**
-   - FastAPI routes in `backend/app/api/endpoints/`
-   - Database models in `backend/app/models.py`
-   - Business logic in `backend/app/services/`
-   - Configuration in `backend/app/config/`
-
-3. **Database Management**
-   - Migrations in `backend/app/migrations/versions/`
-   - Schema updates through Alembic
-   - Data models in SQLAlchemy
-
-4. **Configuration**
-   - Environment variables in `.env`
-   - Application settings in `backend/app/config/`
-   - Logging configuration in `backend/app/config/logging_config.py`
-   - Frontend configuration in `frontend/vite.config.js` and `tailwind.config.js` 
