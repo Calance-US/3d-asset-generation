@@ -8,6 +8,7 @@ import VectorStoreDashboard from './admin/VectorStoreDashboard';
 import { Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { BASE_URL } from '../lib/utils';
 
 // Initialize markdown parser
 const mdParser = new MarkdownIt();
@@ -154,7 +155,7 @@ function Admin() {
   const fetchStats = async () => {
     try {
       setStatsLoading(true);
-      const response = await fetch('http://localhost:8000/api/v1/admin/vector-store-stats');
+      const response = await fetch(`${BASE_URL}/admin/vector-store-stats`);
       if (!response.ok) {
         throw new Error('Failed to fetch generation stats');
       }
@@ -179,7 +180,7 @@ function Admin() {
   const loadPrompts = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/api/v1/prompt");
+      const response = await fetch(`${BASE_URL}/prompt`);
       if (!response.ok) {
         throw new Error(`Failed to load prompts: ${response.statusText}`);
       }
@@ -194,7 +195,7 @@ function Admin() {
 
   const fetchGoldStandards = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/gold-standards/');
+      const response = await fetch(`${BASE_URL}/gold-standards/`);
       if (!response.ok) {
         throw new Error('Failed to fetch gold standards');
       }
@@ -239,7 +240,7 @@ function Admin() {
 
   const handleEditSubmit = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/gold-standards/${editingGoldStandard.id}`, {
+      const response = await fetch(`${BASE_URL}/gold-standards/${editingGoldStandard.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -296,7 +297,7 @@ function Admin() {
       const htmlBlob = new Blob([newGoldStandard.html], { type: 'text/html' });
       formData.append('files', htmlBlob, 'visualization.html');
 
-      const response = await fetch('http://localhost:8000/api/v1/gold-standards', {
+      const response = await fetch(`${BASE_URL}/gold-standards`, {
         method: 'POST',
         body: formData,
       });
@@ -336,7 +337,7 @@ function Admin() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/gold-standards/search?query=${encodeURIComponent(searchQuery)}`);
+      const response = await fetch(`${BASE_URL}/gold-standards/search?query=${encodeURIComponent(searchQuery)}`);
       if (!response.ok) {
         throw new Error('Failed to search gold standards');
       }
@@ -404,7 +405,7 @@ function Admin() {
     const formData = new FormData();
     multiUploadFiles.forEach(file => formData.append('files', file));
     try {
-      const response = await fetch('http://localhost:8000/api/v1/gold-standards/', {
+      const response = await fetch(`${BASE_URL}/gold-standards/`, {
         method: 'POST',
         body: formData,
       });
@@ -426,7 +427,7 @@ function Admin() {
     if (!multiUploadId || !multiUploadPolling) return;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/v1/gold-standards/status/${multiUploadId}`);
+        const res = await fetch(`${BASE_URL}/gold-standards/status/${multiUploadId}`);
         const statusData = await res.json();
         setMultiUploadStatus(statusData);
         if (statusData.status === 'completed' || statusData.status === 'error') {
@@ -453,7 +454,7 @@ function Admin() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/gold-standards/${index}`, {
+      const response = await fetch(`${BASE_URL}/gold-standards/${index}`, {
         method: 'DELETE'
       });
       
@@ -577,7 +578,7 @@ function Admin() {
                         });
 
                         // Start upload
-                        const response = await fetch('http://localhost:8000/api/v1/gold-standards/', {
+                        const response = await fetch(`${BASE_URL}/gold-standards/`, {
                           method: 'POST',
                           body: formData,
                         });
@@ -594,7 +595,7 @@ function Admin() {
                         // Start polling for status
                         const pollInterval = setInterval(async () => {
                           try {
-                            const statusResponse = await fetch(`http://localhost:8000/api/v1/gold-standards/status/${data.upload_id}`);
+                            const statusResponse = await fetch(`${BASE_URL}/gold-standards/status/${data.upload_id}`);
                             if (!statusResponse.ok) {
                               throw new Error('Failed to get upload status');
                             }

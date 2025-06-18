@@ -32,6 +32,7 @@ import {
   Cell,
 } from 'recharts';
 import axios from 'axios';
+import { BASE_URL } from '../../lib/utils';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -48,7 +49,7 @@ const VectorStoreDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/admin/vector-store-stats');
+      const response = await axios.get(`${BASE_URL}/admin/vector-store-stats`);
       setStats(response.data);
     } catch (error) {
       console.error('Error fetching Vector Store stats:', error);
@@ -57,7 +58,7 @@ const VectorStoreDashboard = () => {
 
   const fetchVectors = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/admin/vector-store-vectors', {
+      const response = await axios.get(`${BASE_URL}/admin/vector-store-vectors`, {
         params: {
           skip: (page - 1) * 10,
           limit: 10,

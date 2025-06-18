@@ -4,6 +4,7 @@ import { Disclosure } from '@headlessui/react';
 import { ChevronUpIcon } from '@heroicons/react/20/solid';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { BASE_URL } from '../lib/utils';
 
 export default function Generator() {
   const [prompt, setPrompt] = useState("");
@@ -72,7 +73,7 @@ export default function Generator() {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/v1/history");
+      const response = await fetch(`${BASE_URL}/history`);
       if (!response.ok) {
         throw new Error(`Failed to load history: ${response.statusText}`);
       }
@@ -118,7 +119,7 @@ export default function Generator() {
         }
       });
 
-      const response = await fetch("http://localhost:8000/api/v1/visualizations/generate", {
+      const response = await fetch(`${BASE_URL}/visualizations/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -181,7 +182,7 @@ export default function Generator() {
 
     try {
       console.debug("Sending enhancement request to backend");
-      const response = await fetch("http://localhost:8000/api/v1/prompt/enhance-prompt", {
+      const response = await fetch(`${BASE_URL}/prompt/enhance-prompt`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -260,7 +261,7 @@ export default function Generator() {
         setHtml(entry.response || entry.html);
       } else {
         // If HTML is not in the entry, fetch it from the server
-        const response = await fetch(`http://localhost:8000/api/v1/history/${entry.id}/html`);
+        const response = await fetch(`${BASE_URL}/history/${entry.id}/html`);
         if (!response.ok) {
           throw new Error(`Failed to load HTML: ${response.statusText}`);
         }
@@ -370,7 +371,7 @@ export default function Generator() {
   async function handleDeleteEntry(entryId, event) {
     event.stopPropagation();
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/history/${entryId}`, {
+      const res = await fetch(`${BASE_URL}/history/${entryId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -414,7 +415,7 @@ export default function Generator() {
       console.info("Starting regeneration process...");
       console.debug("Regeneration config:", config);
 
-      const response = await fetch("http://localhost:8000/api/v1/visualizations/generate", {
+      const response = await fetch(`${BASE_URL}/visualizations/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -470,7 +471,7 @@ export default function Generator() {
 
   const handleSaveToLibrary = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/visualizations/save', {
+      const response = await fetch(`${BASE_URL}/visualizations/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -517,7 +518,7 @@ export default function Generator() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch("http://localhost:8000/api/v1/rag/retrieve-similar", {
+      const response = await fetch(`${BASE_URL}/rag/retrieve-similar`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
