@@ -256,9 +256,6 @@ const FAISSDashboard = () => {
                       <TableCell>Education Level</TableCell>
                       <TableCell>Summary</TableCell>
                       <TableCell>Filename</TableCell>
-                      <TableCell>Embedding Norm</TableCell>
-                      <TableCell>Embedding Mean</TableCell>
-                      <TableCell>Embedding Std</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -270,9 +267,6 @@ const FAISSDashboard = () => {
                         <TableCell>{vector.education_level}</TableCell>
                         <TableCell>{vector.summary}</TableCell>
                         <TableCell>{vector.filename}</TableCell>
-                        <TableCell>{vector.embedding_norm.toFixed(4)}</TableCell>
-                        <TableCell>{vector.embedding_mean.toFixed(4)}</TableCell>
-                        <TableCell>{vector.embedding_std.toFixed(4)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

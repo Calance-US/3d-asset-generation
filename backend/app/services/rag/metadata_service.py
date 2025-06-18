@@ -14,9 +14,11 @@ class MetadataService:
     def __init__(self, db: Session):
         self.db = db
     
-    async def add_snippet(self, snippet_data: Dict[str, Any]) -> SnippetMetadata:
-        """Add a new snippet to the metadata store."""
+    async def add_snippet(self, snippet_data: Dict[str, Any], faiss_id: int = None) -> SnippetMetadata:
+        """Add a new snippet to the metadata store, optionally setting faiss_id."""
         try:
+            if faiss_id is not None:
+                snippet_data['faiss_id'] = faiss_id
             snippet = SnippetMetadata(**snippet_data)
             self.db.add(snippet)
             self.db.commit()

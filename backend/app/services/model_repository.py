@@ -9,7 +9,7 @@ from app.config.logging_config import logger
 class ModelRepository:
     def __init__(self):
         self.models_dir = Path(__file__).parent.parent.parent / "models"
-        self.models_dir.mkdir(exist_ok=True)
+        # Removed automatic directory creation to prevent recreation on startup
         
         # Default models for each subject
         self.default_models = {

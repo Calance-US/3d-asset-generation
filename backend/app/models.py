@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import json
 from typing import Dict, Any, Optional
+import sqlalchemy as sa
 
 # Association table for many-to-many relationship between prompts and tags
 prompt_tags = Table(
@@ -124,3 +125,4 @@ class SnippetMetadata(Base):
     key_concepts = Column(String)
     education_level = Column(String)
     learning_objectives = Column(String)
+    faiss_id = Column(sa.BigInteger, unique=True, nullable=True)

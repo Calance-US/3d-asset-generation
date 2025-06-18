@@ -211,7 +211,7 @@ function Admin() {
 
   const handleEditGoldStandard = (standard) => {
     setEditingGoldStandard(standard);
-    setEditForm({
+      setEditForm({
       id: standard.metadata.id || '',
       snippet_hash: standard.metadata.snippet_hash || '',
       topic: standard.metadata.topic || '',
@@ -249,8 +249,8 @@ function Admin() {
           metadata: {
             id: editForm.id,
             snippet_hash: editForm.snippet_hash,
-            topic: editForm.topic,
-            subject: editForm.subject,
+          topic: editForm.topic,
+          subject: editForm.subject,
             key_concepts: editForm.key_concepts,
             education_level: editForm.education_level,
             learning_objectives: editForm.learning_objectives,
@@ -268,11 +268,11 @@ function Admin() {
           }
         }),
       });
-
+      
       if (!response.ok) {
         throw new Error('Failed to update gold standard');
       }
-
+      
       toast.success('Gold standard updated successfully');
       setEditDialogOpen(false);
       fetchGoldStandards();
@@ -609,9 +609,9 @@ function Admin() {
                         Selected {multiUploadFiles.length} file(s)
                       </p>
                     )}
-                  </div>
+        </div>
 
-                  <button
+              <button
                     onClick={async () => {
                       if (multiUploadFiles.length === 0) {
                         toast.error('Please select files to upload');
@@ -681,9 +681,9 @@ function Admin() {
                         ? 'bg-gray-500 cursor-not-allowed'
                         : 'bg-blue-500 hover:bg-blue-600 text-white'
                     }`}
-                  >
+              >
                     {multiUploadPolling ? 'Uploading...' : 'Upload Files'}
-                  </button>
+              </button>
 
                   {multiUploadStatus && (
                     <div className="mt-2">
@@ -709,13 +709,13 @@ function Admin() {
                                     Error: {result.error}
                                   </p>
                                 )}
-                              </div>
+          </div>
                             ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+        </div>
+          </div>
+        )}
+          </div>
+        )}
                 </div>
               </div>
 
@@ -794,9 +794,9 @@ function Admin() {
                       rowsPerPageOptions={[5, 10, 25]}
                     />
                   </TableContainer>
-                </div>
-              )}
-            </div>
+          </div>
+        )}
+      </div>
           </div>
         )}
 
@@ -889,10 +889,10 @@ function Admin() {
                       },
                       '& .MuiInputLabel-root': { color: '#9CA3AF' },
                       '& .MuiInputBase-input': { color: 'white' }
-                    }}
-                  />
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
 
               {/* Content Section */}
               <div className="bg-gray-800 rounded-lg p-4">
@@ -916,7 +916,7 @@ function Admin() {
                       '& .MuiInputBase-input': { color: 'white' }
                     }}
                   /> */}
-                  <div>
+                <div>
                     <label className="block text-gray-300 mb-2">HTML Snippet</label>
                     <textarea
                       value={editForm.html_snippet}
@@ -924,8 +924,8 @@ function Admin() {
                       rows={8}
                       className="w-full p-3 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
                       placeholder="Enter HTML snippet..."
-                    />
-                  </div>
+                  />
+                </div>
                   <TextField
                     label="Summary"
                     value={editForm.summary}
@@ -1101,8 +1101,8 @@ function Admin() {
                 color: '#9CA3AF',
                 '&:hover': { backgroundColor: 'rgba(156, 163, 175, 0.1)' }
               }}
-            >
-              Cancel
+                >
+                  Cancel
             </Button>
             <Button 
               onClick={handleEditSubmit}
@@ -1111,8 +1111,8 @@ function Admin() {
                 backgroundColor: '#3B82F6',
                 '&:hover': { backgroundColor: '#2563EB' }
               }}
-            >
-              Save Changes
+                >
+                  Save Changes
             </Button>
           </DialogActions>
         </Dialog>
@@ -1145,17 +1145,17 @@ function Admin() {
                                 {tag}
                               </span>
                             ))}
-                          </div>
+              </div>
                         )}
-                      </div>
+          </div>
                     </div>
                     <div className="mt-2">
                       <p className="text-gray-300 whitespace-pre-wrap">{prompt.content}</p>
                     </div>
                   </div>
                 ))}
-              </div>
-            )}
+        </div>
+      )}
           </div>
         )}
 

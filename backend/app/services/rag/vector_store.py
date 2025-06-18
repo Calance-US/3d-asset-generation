@@ -7,130 +7,85 @@ import json
 import logging
 from fastapi import Depends
 import faiss
+from sqlalchemy.orm import Session
+from app.models import SnippetMetadata
 
 logger = logging.getLogger(__name__)
 
 class VectorStore:
-    """Vector store for storing and retrieving visualizations."""
+    """Vector store for storing and retrieving visualizations using FAISS IndexIDMap and DB metadata."""
     
-    def __init__(self):
-        self.visualizations: List[Dict[str, Any]] = []
-        self.embeddings: Optional[np.ndarray] = None
-        self.faiss_index = None  # Internal FAISS index
+    def __init__(self, dim: int):
+        self.dim = dim
+        self.faiss_index = faiss.IndexIDMap(faiss.IndexFlatIP(dim))
     
-    def _ensure_faiss_index(self):
-        if self.embeddings is not None and len(self.embeddings) > 0:
-            dim = self.embeddings.shape[1]
-            self.faiss_index = faiss.IndexFlatL2(dim)
-            self.faiss_index.add(self.embeddings)
-        else:
-            self.faiss_index = None
+    def add_visualization(self, embedding: np.ndarray, faiss_id: int) -> None:
+        """Add a visualization embedding to the FAISS index with a given faiss_id."""
+        if not isinstance(embedding, np.ndarray):
+            raise ValueError(f"Embedding must be a numpy ndarray, got {type(embedding)}")
+        embedding = embedding.reshape(1, -1)
+        ids = np.array([faiss_id], dtype=np.int64)
+        self.faiss_index.add_with_ids(embedding, ids)
     
-    async def add_visualization(self, embedding: np.ndarray, metadata: Dict[str, Any]) -> None:
-        """Add a visualization to the store. Embedding must be precomputed and passed in."""
+    def save(self, path: str) -> None:
+        """Save the FAISS index to disk."""
         try:
-            if not isinstance(embedding, np.ndarray):
-                raise ValueError(f"Embedding must be a numpy ndarray, got {type(embedding)}")
-            self.visualizations.append({
-                'metadata': metadata,
-                'embedding': embedding
-            })
-            if self.embeddings is None:
-                self.embeddings = embedding.reshape(1, -1)
-            else:
-                self.embeddings = np.vstack([self.embeddings, embedding])
-            # Add to FAISS
-            if self.faiss_index is None:
-                self._ensure_faiss_index()
-            else:
-                self.faiss_index.add(embedding.reshape(1, -1))
-            logger.info("Successfully added visualization to vector store (FAISS-backed)")
+            faiss.write_index(self.faiss_index, path + '.faiss')
+            logger.info(f"Successfully saved FAISS index to {path + '.faiss'}")
         except Exception as e:
-            logger.error(f"Error adding visualization to vector store: {str(e)}")
+            logger.error(f"Error saving FAISS index: {str(e)}")
             raise
     
-    async def get_similar_visualizations(self, query_embedding: np.ndarray, limit: int = 5) -> List[Dict[str, Any]]:
-        """Get similar visualizations for a query embedding. Embedding must be precomputed and passed in."""
+    def load(self, path: str) -> None:
+        """Load the FAISS index from disk."""
         try:
-            if self.faiss_index is None or self.embeddings is None or len(self.embeddings) == 0:
+            import os
+            faiss_path = path + '.faiss'
+            if not os.path.exists(faiss_path):
+                raise FileNotFoundError(f"FAISS index file not found: {faiss_path}")
+            self.faiss_index = faiss.read_index(faiss_path)
+            logger.info(f"Loaded FAISS index from {faiss_path}")
+        except Exception as e:
+            logger.error(f"Error loading FAISS index: {str(e)}")
+            raise
+    
+    async def get_similar_visualizations(self, query_embedding: np.ndarray, db: Session, limit: int = 5) -> list[dict]:
+        """Get similar visualizations for a query embedding. Returns metadata from DB."""
+        try:
+            if self.faiss_index is None or self.faiss_index.ntotal == 0:
                 return []
             D, I = self.faiss_index.search(query_embedding.reshape(1, -1), limit)
+            faiss_ids = [int(i) for i in I[0] if i != -1]
+            # Fetch metadata from DB
+            results = db.query(SnippetMetadata).filter(SnippetMetadata.faiss_id.in_(faiss_ids)).all()
+            # Map faiss_id to metadata for ordering
+            meta_map = {m.faiss_id: m for m in results}
             return [
                 {
-                    'metadata': self.visualizations[i]['metadata'],
-                    'similarity': float(-D[0][j])  # Negate for L2 distance to get similarity
+                    'metadata': meta_map.get(faiss_id),
+                    'similarity': float(D[0][j])
                 }
-                for j, i in enumerate(I[0]) if i >= 0 and i < len(self.visualizations)
+                for j, faiss_id in enumerate(faiss_ids) if faiss_id in meta_map
             ]
         except Exception as e:
             logger.error(f"Error getting similar visualizations: {str(e)}")
             raise
-    
-    def save(self, path: str) -> None:
-        """Save the vector store to disk."""
-        try:
-            # Convert embeddings to list for JSON serialization
-            data = {
-                'visualizations': [
-                    {
-                        'metadata': viz['metadata'],
-                        'embedding': viz['embedding'].tolist()
-                    }
-                    for viz in self.visualizations
-                ]
-            }
-            # Save to file
-            with open(path, 'w') as f:
-                json.dump(data, f)
-            # Save FAISS index
-            if self.faiss_index is not None:
-                faiss.write_index(self.faiss_index, path + '.faiss')
-            logger.info(f"Successfully saved vector store to {path} and FAISS index to {path + '.faiss'}")
-        except Exception as e:
-            logger.error(f"Error saving vector store: {str(e)}")
-            raise
-    
-    def load(self, path: str) -> None:
-        """Load the vector store from disk."""
-        try:
-            # Load from file
-            with open(path, 'r') as f:
-                data = json.load(f)
-            # Convert embeddings back to numpy arrays
-            self.visualizations = [
-                {
-                    'metadata': viz['metadata'],
-                    'embedding': np.array(viz['embedding'])
-                }
-                for viz in data['visualizations']
-            ]
-            # Update embeddings matrix
-            if self.visualizations:
-                self.embeddings = np.vstack([viz['embedding'] for viz in self.visualizations])
-            else:
-                self.embeddings = None
-            # Load or rebuild FAISS index
-            import os
-            faiss_path = path + '.faiss'
-            if os.path.exists(faiss_path):
-                self.faiss_index = faiss.read_index(faiss_path)
-            else:
-                self._ensure_faiss_index()
-            logger.info(f"Successfully loaded vector store from {path} and FAISS index from {faiss_path if os.path.exists(faiss_path) else '[rebuilt]'}")
-        except Exception as e:
-            logger.error(f"Error loading vector store: {str(e)}")
-            raise
 
-    def has_snippet_hash(self, snippet_hash: str) -> bool:
+    def has_snippet_hash(self, snippet_hash: str, db: Session) -> bool:
         """Check if a snippet with the given hash exists in the vector store."""
-        return any(viz['metadata'].get('snippet_hash') == snippet_hash for viz in self.visualizations)
+        try:
+            existing = db.query(SnippetMetadata).filter(SnippetMetadata.snippet_hash == snippet_hash).first()
+            return existing is not None
+        except Exception as e:
+            logger.error(f"Error checking snippet hash: {str(e)}")
+            return False
 
     def _compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         """Compute cosine similarity between two embeddings."""
         return float(np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2)))
 
 # Global vector store instance
-_vector_store = VectorStore()
+_vector_store = VectorStore(dim=settings.VECTOR_STORE_DIMENSION)
 
 def get_vector_store() -> VectorStore:
     """Get the global vector store instance."""

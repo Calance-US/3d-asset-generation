@@ -24,9 +24,9 @@ else:
     engine = create_engine(
         settings.DATABASE_URL,
         echo=settings.DATABASE_ECHO,
-        pool_size=settings.DATABASE_POOL_SIZE,
-        max_overflow=settings.DATABASE_MAX_OVERFLOW,
-        pool_timeout=settings.DATABASE_POOL_TIMEOUT,
+        pool_size=20,
+        max_overflow=30,
+        pool_timeout=60,
         pool_recycle=settings.DATABASE_POOL_RECYCLE,
     )
 

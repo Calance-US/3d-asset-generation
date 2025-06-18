@@ -24,6 +24,8 @@ from app.services.prompt_selector import PromptSelector
 from typing import List, Dict, Any, Optional
 import numpy as np
 from app.services.rag import get_vector_store
+from app.models import SnippetMetadata
+from app.database.db_config import get_db
 
 router = APIRouter()
 prompt_selector = PromptSelector()
@@ -32,44 +34,40 @@ prompt_selector = PromptSelector()
 async def get_faiss_stats():
     """Get statistics about the FAISS index."""
     vector_store = get_vector_store()
-    
-    if vector_store.faiss_index is None:
-        return {
-            "total_vectors": 0,
-            "dimension": 0,
-            "index_type": "None",
+    db = next(get_db())
+    try:
+        if vector_store.faiss_index is None:
+            return {
+                "total_vectors": 0,
+                "dimension": 0,
+                "index_type": "None",
+                "snippet_types": {},
+                "topics": {},
+                "education_levels": {}
+            }
+        # Get all metadata from DB
+        all_metadata = db.query(SnippetMetadata).all()
+        stats = {
+            "total_vectors": vector_store.faiss_index.ntotal,
+            "dimension": vector_store.faiss_index.d,
+            "index_type": type(vector_store.faiss_index).__name__,
             "snippet_types": {},
             "topics": {},
             "education_levels": {}
         }
-    
-    # Get basic index stats
-    stats = {
-        "total_vectors": vector_store.faiss_index.ntotal,
-        "dimension": vector_store.faiss_index.d,
-        "index_type": type(vector_store.faiss_index).__name__,
-        "snippet_types": {},
-        "topics": {},
-        "education_levels": {}
-    }
-    
-    # Count metadata distributions
-    for viz in vector_store.visualizations:
-        metadata = viz['metadata']
-        
-        # Count snippet types
-        snippet_type = metadata.get('snippet_type', 'unknown')
-        stats['snippet_types'][snippet_type] = stats['snippet_types'].get(snippet_type, 0) + 1
-        
-        # Count topics
-        topic = metadata.get('topic', 'unknown')
-        stats['topics'][topic] = stats['topics'].get(topic, 0) + 1
-        
-        # Count education levels
-        level = metadata.get('education_level', 'unknown')
-        stats['education_levels'][level] = stats['education_levels'].get(level, 0) + 1
-    
-    return stats
+        for metadata in all_metadata:
+            # Count snippet types
+            snippet_type = getattr(metadata, 'snippet_type', 'unknown') or 'unknown'
+            stats['snippet_types'][snippet_type] = stats['snippet_types'].get(snippet_type, 0) + 1
+            # Count topics
+            topic = getattr(metadata, 'topic', 'unknown') or 'unknown'
+            stats['topics'][topic] = stats['topics'].get(topic, 0) + 1
+            # Count education levels
+            level = getattr(metadata, 'education_level', 'unknown') or 'unknown'
+            stats['education_levels'][level] = stats['education_levels'].get(level, 0) + 1
+        return stats
+    finally:
+        db.close()
 
 @router.get("/faiss-vectors", response_model=List[Dict[str, Any]])
 async def get_faiss_vectors(
@@ -81,37 +79,35 @@ async def get_faiss_vectors(
 ):
     """Get paginated vectors from the FAISS index with optional filtering."""
     vector_store = get_vector_store()
-    
-    if vector_store.faiss_index is None:
-        return []
-    
-    # Filter visualizations based on criteria
-    filtered_viz = vector_store.visualizations
-    if snippet_type:
-        filtered_viz = [v for v in filtered_viz if v['metadata'].get('snippet_type') == snippet_type]
-    if topic:
-        filtered_viz = [v for v in filtered_viz if v['metadata'].get('topic') == topic]
-    if education_level:
-        filtered_viz = [v for v in filtered_viz if v['metadata'].get('education_level') == education_level]
-    
-    # Apply pagination
-    paginated_viz = filtered_viz[skip:skip + limit]
-    
-    # Format response
-    return [
-        {
-            "id": viz['metadata'].get('id'),
-            "snippet_type": viz['metadata'].get('snippet_type'),
-            "topic": viz['metadata'].get('topic'),
-            "education_level": viz['metadata'].get('education_level'),
-            "summary": viz['metadata'].get('summary'),
-            "filename": viz['metadata'].get('filename'),
-            "embedding_norm": float(np.linalg.norm(viz['embedding'])),
-            "embedding_mean": float(np.mean(viz['embedding'])),
-            "embedding_std": float(np.std(viz['embedding']))
-        }
-        for viz in paginated_viz
-    ]
+    db = next(get_db())
+    try:
+        if vector_store.faiss_index is None:
+            return []
+        # Build query
+        query = db.query(SnippetMetadata)
+        if snippet_type:
+            query = query.filter(SnippetMetadata.snippet_type == snippet_type)
+        if topic:
+            query = query.filter(SnippetMetadata.topic == topic)
+        if education_level:
+            query = query.filter(SnippetMetadata.education_level == education_level)
+        # Apply pagination
+        paginated_metadata = query.offset(skip).limit(limit).all()
+        # Format response
+        return [
+            {
+                "id": m.id,
+                "faiss_id": m.faiss_id,
+                "snippet_type": m.snippet_type,
+                "topic": m.topic,
+                "education_level": m.education_level,
+                "summary": m.summary,
+                "filename": m.filename,
+            }
+            for m in paginated_metadata
+        ]
+    finally:
+        db.close()
 
 @router.get("/prompts", response_model=PromptsResponse)
 async def get_all_prompts(

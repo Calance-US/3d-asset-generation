@@ -335,7 +335,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
         else:
             embedding_input = request.topic
         embedding = EmbeddingService.generate_embedding(embedding_input)
-        similar = await vector_store.get_similar_visualizations(embedding, limit=3)
+        similar = await vector_store.get_similar_visualizations(embedding, limit=settings.SIMILAR_VIS_LIMIT)
         # Build context string from similar visualizations
         context_blocks = []
         for item in similar:
@@ -1034,7 +1034,7 @@ async def startup_event():
             logger.info("Vector store loaded successfully", extra={
                 "action": "init_vector_store",
                 "path": settings.VECTOR_STORE_PATH,
-                "num_vectors": len(vector_store.visualizations) if vector_store.visualizations else 0
+                "num_vectors": vector_store.faiss_index.ntotal if vector_store.faiss_index else 0
             })
         except FileNotFoundError:
             logger.info("No existing vector store found, starting fresh", extra={
