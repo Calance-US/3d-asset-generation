@@ -35,7 +35,7 @@ import axios from 'axios';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
-const FAISSDashboard = () => {
+const VectorStoreDashboard = () => {
   const [stats, setStats] = useState(null);
   const [vectors, setVectors] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,16 +48,16 @@ const FAISSDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/admin/faiss-stats');
+      const response = await axios.get('http://localhost:8000/api/v1/admin/vector-store-stats');
       setStats(response.data);
     } catch (error) {
-      console.error('Error fetching FAISS stats:', error);
+      console.error('Error fetching Vector Store stats:', error);
     }
   };
 
   const fetchVectors = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/api/v1/admin/faiss-vectors', {
+      const response = await axios.get('http://localhost:8000/api/v1/admin/vector-store-vectors', {
         params: {
           skip: (page - 1) * 10,
           limit: 10,
@@ -66,7 +66,7 @@ const FAISSDashboard = () => {
       });
       setVectors(response.data);
     } catch (error) {
-      console.error('Error fetching FAISS vectors:', error);
+      console.error('Error fetching Vector Store vectors:', error);
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,7 @@ const FAISSDashboard = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
-        FAISS Index Dashboard
+        Vector Store Dashboard
       </Typography>
 
       <Grid container spacing={3}>
@@ -287,4 +287,4 @@ const FAISSDashboard = () => {
   );
 };
 
-export default FAISSDashboard; 
+export default VectorStoreDashboard; 

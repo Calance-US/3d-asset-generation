@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Tabs, Tab } from '@mui/material';
 import UserManagement from '../components/admin/UserManagement';
 import ModelManagement from '../components/admin/ModelManagement';
-import FAISSDashboard from '../components/admin/FAISSDashboard';
+import VectorStoreDashboard from '../components/admin/VectorStoreDashboard';
 
 const AdminPage = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -21,7 +21,7 @@ const AdminPage = () => {
 
       {activeTab === 0 && <UserManagement />}
       {activeTab === 1 && <ModelManagement />}
-      {activeTab === 2 && <FAISSDashboard />}
+      {activeTab === 2 && <VectorStoreDashboard />}
     </div>
   );
 };

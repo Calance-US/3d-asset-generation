@@ -6,73 +6,78 @@ from app.config.settings import settings
 import json
 import logging
 from fastapi import Depends
-import faiss
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as qmodels
 from sqlalchemy.orm import Session
 from app.models import SnippetMetadata
 
 logger = logging.getLogger(__name__)
 
 class VectorStore:
-    """Vector store for storing and retrieving visualizations using FAISS IndexIDMap and DB metadata."""
-    
-    def __init__(self, dim: int):
+    """Vector store for storing and retrieving visualizations using Qdrant and DB metadata."""
+    def __init__(self, dim: int, collection_name: str = None):
         self.dim = dim
-        self.faiss_index = faiss.IndexIDMap(faiss.IndexFlatIP(dim))
-    
+        # Use collection name from settings, fallback to argument, then default
+        self.collection_name = settings.VECTOR_STORE_COLLECTION_NAME
+        self.client = QdrantClient(host="localhost", port=6333)
+        # Create collection if it doesn't exist
+        collections = [c.name for c in self.client.get_collections().collections]
+        if self.collection_name not in collections:
+            self.client.recreate_collection(
+                collection_name=self.collection_name,
+                vectors_config=qmodels.VectorParams(size=dim, distance=qmodels.Distance.COSINE)
+            )
+
     def add_visualization(self, embedding: np.ndarray, faiss_id: int) -> None:
-        """Add a visualization embedding to the FAISS index with a given faiss_id."""
+        """Add a visualization embedding to the Qdrant collection with a given id."""
         if not isinstance(embedding, np.ndarray):
             raise ValueError(f"Embedding must be a numpy ndarray, got {type(embedding)}")
-        embedding = embedding.reshape(1, -1)
-        ids = np.array([faiss_id], dtype=np.int64)
-        self.faiss_index.add_with_ids(embedding, ids)
-    
+        embedding = embedding.reshape(-1).astype('float32')
+        point = qmodels.PointStruct(id=int(faiss_id), vector=embedding.tolist(), payload={})
+        self.client.upsert(collection_name=self.collection_name, points=[point])
+        logger.info(f"Added vector with id {faiss_id} to Qdrant collection '{self.collection_name}'")
+
     def save(self, path: str) -> None:
-        """Save the FAISS index to disk."""
-        try:
-            faiss.write_index(self.faiss_index, path + '.faiss')
-            logger.info(f"Successfully saved FAISS index to {path + '.faiss'}")
-        except Exception as e:
-            logger.error(f"Error saving FAISS index: {str(e)}")
-            raise
-    
+        """No-op for Qdrant (data is persisted automatically)."""
+        logger.info("Qdrant persists data automatically; save() is a no-op.")
+
     def load(self, path: str) -> None:
-        """Load the FAISS index from disk."""
-        try:
-            import os
-            faiss_path = path + '.faiss'
-            if not os.path.exists(faiss_path):
-                raise FileNotFoundError(f"FAISS index file not found: {faiss_path}")
-            self.faiss_index = faiss.read_index(faiss_path)
-            logger.info(f"Loaded FAISS index from {faiss_path}")
-        except Exception as e:
-            logger.error(f"Error loading FAISS index: {str(e)}")
-            raise
-    
-    async def get_similar_visualizations(self, query_embedding: np.ndarray, db: Session, limit: int = 5) -> list[dict]:
+        """No-op for Qdrant (data is loaded automatically)."""
+        logger.info("Qdrant loads data automatically; load() is a no-op.")
+
+    async def get_similar_visualizations(self, query_embedding: np.ndarray, db, limit: int = 5) -> list[dict]:
         """Get similar visualizations for a query embedding. Returns metadata from DB."""
         try:
-            if self.faiss_index is None or self.faiss_index.ntotal == 0:
-                return []
-            D, I = self.faiss_index.search(query_embedding.reshape(1, -1), limit)
-            faiss_ids = [int(i) for i in I[0] if i != -1]
+            logger.info("[get_similar_visualizations] Starting Qdrant search")
+            query_vec = np.ascontiguousarray(query_embedding, dtype='float32').reshape(-1).tolist()
+            search_result = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vec,
+                limit=limit
+            )
+            qdrant_ids = [int(hit.id) for hit in search_result]
+            logger.info(f"[get_similar_visualizations] Qdrant IDs: {qdrant_ids}")
             # Fetch metadata from DB
-            results = db.query(SnippetMetadata).filter(SnippetMetadata.faiss_id.in_(faiss_ids)).all()
+            results = db.query(SnippetMetadata).filter(SnippetMetadata.faiss_id.in_(qdrant_ids)).all()
+            logger.info(f"[get_similar_visualizations] DB query complete: {len(results)} results")
             # Map faiss_id to metadata for ordering
             meta_map = {m.faiss_id: m for m in results}
-            return [
+            logger.info("[get_similar_visualizations] Mapping complete")
+            response = [
                 {
-                    'metadata': meta_map.get(faiss_id),
-                    'similarity': float(D[0][j])
+                    'metadata': {k: v for k, v in meta_map.get(qid).__dict__.items() if not k.startswith('_sa_instance_state')} if qid in meta_map else None,
+                    'similarity': float(hit.score)
                 }
-                for j, faiss_id in enumerate(faiss_ids) if faiss_id in meta_map
+                for hit, qid in zip(search_result, qdrant_ids) if qid in meta_map
             ]
+            logger.info(f"[get_similar_visualizations] Response ready with {len(response)} items")
+            return response
         except Exception as e:
-            logger.error(f"Error getting similar visualizations: {str(e)}")
+            logger.error(f"[get_similar_visualizations] Error: {str(e)}")
             raise
 
-    def has_snippet_hash(self, snippet_hash: str, db: Session) -> bool:
-        """Check if a snippet with the given hash exists in the vector store."""
+    def has_snippet_hash(self, snippet_hash: str, db) -> bool:
+        """Check if a snippet with the given hash exists in the vector store (via DB)."""
         try:
             existing = db.query(SnippetMetadata).filter(SnippetMetadata.snippet_hash == snippet_hash).first()
             return existing is not None

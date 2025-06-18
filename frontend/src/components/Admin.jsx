@@ -4,7 +4,7 @@ import MdEditor from 'react-markdown-editor-lite';
 import MarkdownIt from 'markdown-it';
 import 'react-markdown-editor-lite/lib/index.css';
 import { toast } from 'react-toastify';
-import FAISSDashboard from './admin/FAISSDashboard';
+import VectorStoreDashboard from './admin/VectorStoreDashboard';
 import { Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -154,7 +154,7 @@ function Admin() {
   const fetchStats = async () => {
     try {
       setStatsLoading(true);
-      const response = await fetch('http://localhost:8000/api/v1/admin/faiss-stats');
+      const response = await fetch('http://localhost:8000/api/v1/admin/vector-store-stats');
       if (!response.ok) {
         throw new Error('Failed to fetch generation stats');
       }
@@ -553,7 +553,19 @@ function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="min-h-screen bg-gray-900 p-6">
+      {/* Home Button */}
+      <div className="mb-4 flex justify-between items-center">
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={() => navigate('/')}
+          sx={{ color: '#3B82F6', borderColor: '#3B82F6', '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' } }}
+        >
+          Home
+        </Button>
+        {/* You can add other header content here if needed */}
+      </div>
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
         
@@ -1161,7 +1173,7 @@ function Admin() {
 
         {activeTab === 2 && (
           <div className="bg-gray-800 shadow rounded-lg p-6">
-            <FAISSDashboard />
+            <VectorStoreDashboard />
           </div>
         )}
       </div>

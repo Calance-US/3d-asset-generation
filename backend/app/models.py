@@ -27,7 +27,7 @@ visualization_tags = Table(
 class Prompt(Base):
     __tablename__ = "prompts"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     topic = Column(String, index=True)
     subject = Column(String, index=True)
     content = Column(Text)

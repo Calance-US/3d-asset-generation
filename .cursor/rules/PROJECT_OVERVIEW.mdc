@@ -50,6 +50,7 @@ This project is a 3D educational visualization platform with a React frontend an
   - Testing: Jest, React Testing Library
   - Build: React Scripts
   - PostCSS, Autoprefixer: CSS processing
+  - **Always use `uv run` to start backend Python processes (including FastAPI), not `python` or `uvicorn` directly.**
 
 ## Frontend Structure
 

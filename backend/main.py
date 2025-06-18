@@ -15,7 +15,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import openai
 import json
-from datetime import datetime
+import datetime
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from sqlalchemy.orm import Session
@@ -147,8 +147,8 @@ class VisualizationResponse(BaseModel):
     subject: str
     html_content: str
     config: Dict[str, Any]
-    created_at: datetime
-    updated_at: datetime
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
 
 class RetrieveSimilarResponse(BaseModel):
     results: List[Dict[str, Any]]
@@ -170,8 +170,8 @@ async def save_visualization(
             html_content=visualization.html_content,
             config=visualization.config,
             embedding=embedding,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
+            created_at=datetime.datetime.now(),
+            updated_at=datetime.datetime.now()
         )
 
         db.add(db_visualization)
@@ -315,6 +315,16 @@ def parse_html_content(text: str) -> str:
         logger.error(f"Error parsing HTML content: {str(e)}")
         return ""
 
+def serialize_datetimes(obj):
+    if isinstance(obj, dict):
+        return {k: serialize_datetimes(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_datetimes(v) for v in obj]
+    elif isinstance(obj, datetime.datetime):
+        return obj.isoformat()
+    else:
+        return obj
+
 @app.post("/generate", response_model=HTMLResponse)
 async def generate_visualization(request: GenerateRequest, db: Session = Depends(get_db)) -> HTMLResponse:
     """Generate a 3D visualization based on the topic."""
@@ -335,23 +345,43 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
         else:
             embedding_input = request.topic
         embedding = EmbeddingService.generate_embedding(embedding_input)
-        similar = await vector_store.get_similar_visualizations(embedding, limit=settings.SIMILAR_VIS_LIMIT)
-        # Build context string from similar visualizations
+        similar = await vector_store.get_similar_visualizations(embedding, db, limit=settings.SIMILAR_VIS_LIMIT)
+        # Build improved context string from similar visualizations
         context_blocks = []
-        for item in similar:
+        for idx, item in enumerate(similar, 1):
             meta = item['metadata']
-            # Try to fetch full visualization from DB if id is present
+            meta = serialize_datetimes(meta)
             viz_id = meta.get('id')
             viz = None
-            if viz_id:
+            if viz_id and isinstance(viz_id, int):
                 viz = db.query(Visualization).filter_by(id=viz_id).first()
+            # Prefer full visualization from DB if available
             if viz:
-                context_blocks.append(f"Example Visualization:\nTopic: {viz.topic}\nConfig: {json.dumps(viz.config, indent=2)}\nSummary: {viz.config.get('scene_description', '')}")
+                context_blocks.append(
+                    f"""### Example {idx}
+- **Summary:** {viz.config.get('scene_description', '')}
+- **Code Snippet:**  
+```code\n{viz.html_content[:1000]}{'... (truncated)' if len(viz.html_content) > 1000 else ''}\n```
+"""
+                )
             else:
-                # Fallback: use metadata
-                context_blocks.append(f"Example Visualization:\nConfig: {json.dumps(meta, indent=2)}")
-        context_text = "\n\n".join(context_blocks) if context_blocks else ""
-
+                context_blocks.append(
+                    f"""### Example {idx}
+- **Summary:** {meta.get('summary', '')}
+- **Code Snippet:**  
+```code\n{meta.get('html_snippet', '')[:1000]}{'... (truncated)' if meta.get('html_snippet', '') and len(meta.get('html_snippet', '')) > 1000 else ''}\n```
+"""
+                )
+        if context_blocks:
+            context_text = (
+                "---\n"
+                "## 📚 Context: Gold Standard Examples\n\n"
+                "Below are high-quality, accurate examples for your reference. Use their structure, accuracy, and style as a guide for your own output.\n\n"
+                + "---\n\n".join(context_blocks) +
+                "---\n\n"
+            )
+        else:
+            context_text = ""
         # --- Logging retrieval quality ---
         logger.info("Retrieval event", extra={
             "user_query": request.topic,
@@ -365,7 +395,6 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                 for item in similar
             ]
         })
-
         # Generate the prompt using either custom config or basic topic info
         if request.config:
             logger.info("Using provided configuration", extra={
@@ -390,8 +419,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                 request.subject,
                 education_level="High School"
             )
-
-        # Inject retrieved context into the prompt
+        # Inject improved context into the prompt
         if context_text:
             prompt_content = f"{context_text}\n\n---\n\n{prompt_content}"
 
@@ -516,8 +544,8 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             "learning_objectives": request.config.learning_objectives if request.config else None,
             "interactive_features": request.config.interactive_features if request.config else None,
             "embedding": None,  # Will be populated later if needed
-            "created_at": datetime.now(),
-            "updated_at": datetime.now()
+            "created_at": datetime.datetime.now(),
+            "updated_at": datetime.datetime.now()
         }
         
         # Log the values being passed to create_prompt
@@ -553,7 +581,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
 
         # Then create the history entry with the prompt_id and visualization details
         history_entry = {
-            "id": str(datetime.now().timestamp()),
+            "id": str(datetime.datetime.now().timestamp()),
             "prompt_id": prompt.id,
             "user_query": request.topic,
             "response": html_content,
@@ -567,7 +595,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             "supporting_narration_texts": json.dumps(request.config.supporting_narration_texts) if request.config else None,
             "scene_description": request.config.scene_description if request.config else None,
             "generation_time": generation_time,
-            "created_at": datetime.now()
+            "created_at": datetime.datetime.now()
         }
         create_history_entry(db, history_entry)
 
@@ -608,7 +636,7 @@ async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
                 provider=entry.provider or "Unknown",
                 subject=entry.prompt.subject if entry.prompt else "Unknown",
                 html=entry.response or "",
-                timestamp=entry.created_at.isoformat() if entry.created_at else datetime.now().isoformat(),
+                timestamp=entry.created_at.isoformat() if entry.created_at else datetime.datetime.now().isoformat(),
                 # Add configuration fields
                 config={
                     "topic_name": entry.prompt.topic if entry.prompt else "",
@@ -650,7 +678,7 @@ async def get_history_entry(entry_id: str, db: Session = Depends(get_db)) -> His
             provider=entry.provider or "Unknown",
             subject=entry.prompt.subject if entry.prompt else "Unknown",
             html=entry.response or "",
-            timestamp=entry.created_at.isoformat() if entry.created_at else datetime.now().isoformat(),
+            timestamp=entry.created_at.isoformat() if entry.created_at else datetime.datetime.now().isoformat(),
             # Add configuration fields
             config={
                 "topic_name": entry.prompt.topic if entry.prompt else "",
@@ -970,7 +998,7 @@ async def retrieve_similar_visualizations(
             embedding_input = request.topic
         embedding = EmbeddingService.generate_embedding(embedding_input)
         vector_store = get_vector_store()
-        similar = await vector_store.get_similar_visualizations(embedding, limit=top_k)
+        similar = await vector_store.get_similar_visualizations(embedding, db, limit=top_k)
         # Optionally, add similarity scores if available
         results = []
         for item in similar:

@@ -36,23 +36,14 @@ def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     url = settings.DATABASE_URL
 
-    # Detect if using SQLite
-    is_sqlite = url.startswith("sqlite")
-
     # Build configuration dict accordingly
     configuration = {
         "sqlalchemy.url": url,
         "sqlalchemy.echo": settings.DATABASE_ECHO,
     }
 
-    if not is_sqlite:
-        # Only add pool options for non-SQLite DBs
-        configuration.update({
-            "sqlalchemy.pool_size": settings.DATABASE_POOL_SIZE,
-            "sqlalchemy.max_overflow": settings.DATABASE_MAX_OVERFLOW,
-            "sqlalchemy.pool_timeout": settings.DATABASE_POOL_TIMEOUT,
-            "sqlalchemy.pool_recycle": settings.DATABASE_POOL_RECYCLE,
-        })
+    # Do NOT add pool options for Alembic migrations (NullPool does not accept them)
+    # If you want to use a pool, use QueuePool, but for migrations NullPool is correct.
 
     connectable = engine_from_config(
         configuration,

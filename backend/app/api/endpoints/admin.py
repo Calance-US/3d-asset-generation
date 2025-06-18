@@ -26,63 +26,63 @@ import numpy as np
 from app.services.rag import get_vector_store
 from app.models import SnippetMetadata
 from app.database.db_config import get_db
+import logging
 
 router = APIRouter()
 prompt_selector = PromptSelector()
 
-@router.get("/faiss-stats", response_model=Dict[str, Any])
-async def get_faiss_stats():
-    """Get statistics about the FAISS index."""
+@router.get("/vector-store-stats", response_model=Dict[str, Any])
+async def get_vector_store_stats():
+    """Get statistics about the vector store (Qdrant or other)."""
     vector_store = get_vector_store()
     db = next(get_db())
+    logger = logging.getLogger("vector_store_stats")
     try:
-        if vector_store.faiss_index is None:
-            return {
-                "total_vectors": 0,
-                "dimension": 0,
-                "index_type": "None",
-                "snippet_types": {},
-                "topics": {},
-                "education_levels": {}
-            }
-        # Get all metadata from DB
-        all_metadata = db.query(SnippetMetadata).all()
         stats = {
-            "total_vectors": vector_store.faiss_index.ntotal,
-            "dimension": vector_store.faiss_index.d,
-            "index_type": type(vector_store.faiss_index).__name__,
+            "total_vectors": 0,
+            "dimension": 0,
+            "index_type": "Qdrant",
             "snippet_types": {},
             "topics": {},
             "education_levels": {}
         }
+        # Use Qdrant count API for total vectors
+        try:
+            logger.info(f"Qdrant collection name: {vector_store.collection_name}")
+            logger.info(f"Qdrant client host: {getattr(vector_store.client, 'host', 'unknown')}, port: {getattr(vector_store.client, 'port', 'unknown')}")
+            info = vector_store.client.get_collection(vector_store.collection_name)
+            logger.info(f"Qdrant get_collection result: {info}")
+            count_result = vector_store.client.count(collection_name=vector_store.collection_name, exact=True)
+            logger.info(f"Qdrant count result: {count_result}")
+            stats["total_vectors"] = count_result.count
+            stats["dimension"] = info.config.params.vectors.size
+        except Exception as e:
+            logger.error(f"Error querying Qdrant: {e}")
+        # Get all metadata from DB
+        all_metadata = db.query(SnippetMetadata).all()
         for metadata in all_metadata:
-            # Count snippet types
             snippet_type = getattr(metadata, 'snippet_type', 'unknown') or 'unknown'
             stats['snippet_types'][snippet_type] = stats['snippet_types'].get(snippet_type, 0) + 1
-            # Count topics
             topic = getattr(metadata, 'topic', 'unknown') or 'unknown'
             stats['topics'][topic] = stats['topics'].get(topic, 0) + 1
-            # Count education levels
             level = getattr(metadata, 'education_level', 'unknown') or 'unknown'
             stats['education_levels'][level] = stats['education_levels'].get(level, 0) + 1
         return stats
     finally:
         db.close()
 
-@router.get("/faiss-vectors", response_model=List[Dict[str, Any]])
-async def get_faiss_vectors(
+@router.get("/vector-store-vectors", response_model=List[Dict[str, Any]])
+async def get_vector_store_vectors(
     skip: int = 0,
     limit: int = 100,
     snippet_type: Optional[str] = None,
     topic: Optional[str] = None,
     education_level: Optional[str] = None
 ):
-    """Get paginated vectors from the FAISS index with optional filtering."""
+    """Get paginated vectors from the vector store with optional filtering."""
     vector_store = get_vector_store()
     db = next(get_db())
     try:
-        if vector_store.faiss_index is None:
-            return []
         # Build query
         query = db.query(SnippetMetadata)
         if snippet_type:

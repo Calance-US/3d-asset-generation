@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 from typing import Dict, List, Optional
-import os
 from dotenv import load_dotenv
 from functools import lru_cache
 from pathlib import Path
@@ -11,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings."""
     
     # Environment Settings
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    ENVIRONMENT: str = "development"
     
     # API Settings
     API_V1_STR: str = "/api/v1"
@@ -28,7 +27,7 @@ class Settings(BaseSettings):
     VECTOR_STORE_PATH: str = "vector_store.json"
     
     # Database Settings
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+    DATABASE_URL: str = "sqlite:///./app.db"
     DATABASE_ECHO: bool = False
     DATABASE_POOL_SIZE: int = 5
     DATABASE_MAX_OVERFLOW: int = 10
@@ -104,6 +103,7 @@ class Settings(BaseSettings):
 
     # Vector store settings
     VECTOR_STORE_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2 model
+    VECTOR_STORE_COLLECTION_NAME: str = "visualizations"
 
     # Gold Standards Analysis Prompt
     GOLD_STANDARD_ANALYSIS_PROMPT: str = """
