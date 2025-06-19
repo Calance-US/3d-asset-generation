@@ -1,0 +1,165 @@
+site_name: 3D Educational Visualization Platform
+site_description: Comprehensive documentation for the 3D Educational Visualization Platform with AI-powered generation and RAG
+site_author: Development Team
+site_url: https://your-domain.com
+
+# Repository
+repo_name: 3d-webapp
+repo_url: https://github.com/your-org/3d-webapp
+edit_uri: edit/main/docs/
+
+# Theme configuration
+theme:
+  name: material
+  language: en
+  palette:
+    # Palette toggle for automatic mode
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to system preference
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+
+  # Features
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - content.tabs.link
+    - content.tooltips
+    - header.autohide
+    - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.instant.result
+    - navigation.instant.suggest
+    - navigation.instant.tracking
+    - navigation.instant.worker
+    - navigation.instant.worker.offline
+    - navigation.prune
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - navigation.tracking.anchor
+    - navigation.tracking.anchor.instant
+    - navigation.tracking.anchor.instant.worker
+    - navigation.tracking.anchor.instant.worker.offline
+    - navigation.tracking.anchor.worker
+    - navigation.tracking.anchor.worker.offline
+    - navigation.tracking.worker
+    - navigation.tracking.worker.offline
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+
+  # Icon
+  icon:
+    repo: fontawesome/brands/github
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Plugins
+plugins:
+  - search
+  - mermaid2:
+      arguments:
+        theme: default
+        themeVariables:
+          primaryColor: "#3f51b5"
+          primaryTextColor: "#fff"
+          primaryBorderColor: "#3f51b5"
+          lineColor: "#3f51b5"
+          secondaryColor: "#f50057"
+          tertiaryColor: "#ff4081"
+
+# Navigation structure
+nav:
+  - Home: index.md
+  - System Overview: README.md
+  - Core Flows:
+    - Enhance Prompt Flow: enhance-prompt-flow.md
+    - Generate Visualization Flow: generate-visualization-flow.md
+    - Show Retrieved Results Flow: show-retrieved-results-flow.md
+    - Add Gold Standards Flow: add-gold-standards-flow.md
+
+# Extra CSS and JS
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+# Copyright
+copyright: Copyright &copy; 2024 Development Team 
+
+# Output directory for built site
+site_dir: site 

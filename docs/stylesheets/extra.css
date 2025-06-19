@@ -1,0 +1,104 @@
+/* Custom styles for 3D Educational Visualization Platform documentation */
+
+/* Mermaid diagram styling */
+.mermaid {
+    text-align: center;
+    margin: 2rem 0;
+    padding: 1rem;
+    background-color: var(--md-default-bg-color);
+    border-radius: 0.5rem;
+    border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Code block styling */
+.md-typeset code {
+    background-color: var(--md-code-bg-color);
+    border-radius: 0.25rem;
+    padding: 0.125rem 0.25rem;
+    font-size: 0.85em;
+}
+
+/* Admonition styling */
+.md-typeset .admonition {
+    border-radius: 0.5rem;
+    border-left: 0.25rem solid;
+}
+
+/* Table styling */
+.md-typeset table {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Navigation styling */
+.md-nav__link {
+    border-radius: 0.25rem;
+    transition: background-color 0.2s ease;
+}
+
+.md-nav__link:hover {
+    background-color: var(--md-primary-fg-color--lightest);
+}
+
+/* Header styling */
+.md-header {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Footer styling */
+.md-footer {
+    border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Custom button styling */
+.md-button {
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+}
+
+.md-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Search styling */
+.md-search__input {
+    border-radius: 0.5rem;
+}
+
+/* Content area styling */
+.md-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Sidebar styling */
+.md-sidebar {
+    border-right: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .md-content {
+        padding: 0 1rem;
+    }
+    
+    .mermaid {
+        font-size: 0.8em;
+    }
+}
+
+/* Print styles */
+@media print {
+    .md-header,
+    .md-sidebar,
+    .md-footer {
+        display: none;
+    }
+    
+    .md-content {
+        margin: 0;
+        padding: 0;
+    }
+} 

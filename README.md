@@ -164,6 +164,56 @@ npm start
 
 3. Open http://localhost:3000 in your browser
 
+### Documentation
+
+The project includes comprehensive documentation built with MkDocs and the Material theme. The documentation covers system architecture, API flows, and development guides.
+
+#### Running the Documentation
+
+1. Navigate to the docs directory:
+```bash
+cd docs
+```
+
+2. Install dependencies (if not already installed):
+```bash
+uv pip install -e .
+```
+
+3. Serve the documentation locally:
+```bash
+uv run mkdocs serve -a 127.0.0.1:8001
+```
+
+4. Open http://127.0.0.1:8001 in your browser
+
+#### Documentation Structure
+
+The documentation includes:
+- **System Overview**: High-level architecture and purpose
+- **Core Flows**: Detailed sequence diagrams for key processes:
+  - Enhance Prompt Flow
+  - Generate Visualization Flow  
+  - Show Retrieved Results Flow
+  - Add Gold Standards Flow
+
+#### Building Documentation
+
+To build static documentation files:
+```bash
+cd docs
+uv run python -m mkdocs build
+```
+
+This creates a `site/` directory with static HTML files that can be deployed to any web server.
+
+#### Documentation Development
+
+- Documentation source files are in `docs/docs/`
+- Configuration is in `docs/mkdocs.yml`
+- Custom CSS and JavaScript are in `docs/stylesheets/` and `docs/javascripts/`
+- The docs project uses uv for dependency management
+
 ### Adding New Features
 1. Frontend components are in `frontend/src/components/`
 2. Backend API endpoints are in `backend/main.py`
@@ -171,4 +221,4 @@ npm start
 
 ## License
 
-MIT License 
+MIT License
