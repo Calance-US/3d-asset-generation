@@ -9,6 +9,7 @@ def serialize_datetimes(obj):
         The object with all datetime objects converted to ISO strings.
     """
     import datetime
+
     if isinstance(obj, dict):
         return {k: serialize_datetimes(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -16,4 +17,4 @@ def serialize_datetimes(obj):
     elif isinstance(obj, datetime.datetime):
         return obj.isoformat()
     else:
-        return obj 
+        return obj

@@ -1,37 +1,42 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+from app.database.database import get_db
+from app.models import HistoryEntry, SnippetMetadata
+from app.services.rag import get_vector_store
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database.database import get_db
-from app.models import SnippetMetadata, HistoryEntry
-from app.services.rag import get_vector_store
-
 router = APIRouter()
 
+
 @router.get("/vector-store-stats", response_model=Dict[str, Any])
-async def get_vector_store_stats():
+async def get_vector_store_stats() -> Dict[str, Any]:
     """Get statistics about the vector store (Qdrant or other)."""
     vector_store = get_vector_store()
     db = next(get_db())
     logger = logging.getLogger("vector_store_stats")
     try:
-        stats = {
+        stats: Dict[str, Any] = {
             "total_vectors": 0,
             "dimension": 0,
             "index_type": "Qdrant",
             "snippet_types": {},
             "topics": {},
-            "education_levels": {}
+            "education_levels": {},
         }
         # Use Qdrant count API for total vectors
         try:
             logger.info(f"Qdrant collection name: {vector_store.collection_name}")
-            logger.info(f"Qdrant client host: {getattr(vector_store.client, 'host', 'unknown')}, port: {getattr(vector_store.client, 'port', 'unknown')}")
+            logger.info(
+                f"Qdrant client host: {getattr(vector_store.client, 'host', 'unknown')}, port: {getattr(vector_store.client, 'port', 'unknown')}"
+            )
             info = vector_store.client.get_collection(vector_store.collection_name)
             logger.info(f"Qdrant get_collection result: {info}")
-            count_result = vector_store.client.count(collection_name=vector_store.collection_name, exact=True)
+            count_result = vector_store.client.count(
+                collection_name=vector_store.collection_name, exact=True
+            )
             logger.info(f"Qdrant count result: {count_result}")
             stats["total_vectors"] = count_result.count
             stats["dimension"] = info.config.params.vectors.size
@@ -40,15 +45,20 @@ async def get_vector_store_stats():
         # Get all metadata from DB
         all_metadata = db.query(SnippetMetadata).all()
         for metadata in all_metadata:
-            snippet_type = getattr(metadata, 'snippet_type', 'unknown') or 'unknown'
-            stats['snippet_types'][snippet_type] = stats['snippet_types'].get(snippet_type, 0) + 1
-            topic = getattr(metadata, 'topic', 'unknown') or 'unknown'
-            stats['topics'][topic] = stats['topics'].get(topic, 0) + 1
-            level = getattr(metadata, 'education_level', 'unknown') or 'unknown'
-            stats['education_levels'][level] = stats['education_levels'].get(level, 0) + 1
+            snippet_type = getattr(metadata, "snippet_type", "unknown") or "unknown"
+            stats["snippet_types"][snippet_type] = (
+                stats["snippet_types"].get(snippet_type, 0) + 1
+            )
+            topic = getattr(metadata, "topic", "unknown") or "unknown"
+            stats["topics"][topic] = stats["topics"].get(topic, 0) + 1
+            level = getattr(metadata, "education_level", "unknown") or "unknown"
+            stats["education_levels"][level] = (
+                stats["education_levels"].get(level, 0) + 1
+            )
         return stats
     finally:
         db.close()
+
 
 @router.get("/vector-store-vectors", response_model=List[Dict[str, Any]])
 async def get_vector_store_vectors(
@@ -56,8 +66,8 @@ async def get_vector_store_vectors(
     limit: int = 100,
     snippet_type: Optional[str] = None,
     topic: Optional[str] = None,
-    education_level: Optional[str] = None
-):
+    education_level: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Get paginated vectors from the vector store with optional filtering."""
     vector_store = get_vector_store()
     db = next(get_db())
@@ -88,37 +98,36 @@ async def get_vector_store_vectors(
     finally:
         db.close()
 
-@router.get("/admin/generation-stats", response_model=dict)
-async def get_generation_stats(db: Session = Depends(get_db)) -> dict:
+
+@router.get("/admin/generation-stats", response_model=Dict[str, Any])
+async def get_generation_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Get statistics about visualization generation times."""
     try:
         # Get all generation times
-        generation_times = db.query(HistoryEntry.generation_time).filter(
-            HistoryEntry.generation_time.isnot(None)
-        ).all()
+        generation_times = (
+            db.query(HistoryEntry.generation_time)
+            .filter(HistoryEntry.generation_time.isnot(None))
+            .all()
+        )
         if not generation_times:
-            return {
-                "mean": 0,
-                "median": 0,
-                "p95": 0,
-                "p99": 0,
-                "total_generations": 0
-            }
+            return {"mean": 0, "median": 0, "p95": 0, "p99": 0, "total_generations": 0}
         # Convert to numpy array for calculations
-        import numpy as np
         times = np.array([t[0] for t in generation_times])
         return {
             "mean": float(np.mean(times)),
             "median": float(np.median(times)),
             "p95": float(np.percentile(times, 95)),
             "p99": float(np.percentile(times, 99)),
-            "total_generations": len(times)
+            "total_generations": len(times),
         }
     except Exception as e:
         logger = logging.getLogger("generation_stats")
-        logger.error("Error getting generation stats", extra={
-            "action": "get_generation_stats",
-            "error": str(e),
-            "error_type": type(e).__name__
-        })
-        raise HTTPException(status_code=500, detail=str(e)) 
+        logger.error(
+            "Error getting generation stats",
+            extra={
+                "action": "get_generation_stats",
+                "error": str(e),
+                "error_type": type(e).__name__,
+            },
+        )
+        raise HTTPException(status_code=500, detail=str(e))

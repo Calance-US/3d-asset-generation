@@ -1,64 +1,67 @@
-from pydantic_settings import BaseSettings
-from typing import Dict, List, Optional
-from dotenv import load_dotenv
 from functools import lru_cache
-from pathlib import Path
+
+from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
 load_dotenv()
 
+
 class Settings(BaseSettings):
     """Application settings."""
-    
+
     # Environment Settings
     ENVIRONMENT: str = "development"
-    
+
     # OpenAI Settings
     OPENAI_API_KEY: str
     OPENAI_MODEL: str = "gpt-4-turbo-preview"
-    
+
     # Google AI Settings
     GOOGLE_API_KEY: str
-    
+
     # Vector Store Settings
     VECTOR_STORE_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2 model
     VECTOR_STORE_COLLECTION_NAME: str = "visualizations"
-    
+
     # Database Settings
     DATABASE_URL: str = "sqlite:///./app.db"
     DATABASE_ECHO: bool = False
     DATABASE_POOL_RECYCLE: int = 1800
-    
+
     # Model Settings
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen2.5:32b"
     GEMINI_MODEL: str = "gemini-2.0-flash"
-    
+
     # Generation Settings
     TEMPERATURE: float = 0.7
     STREAM: bool = False
 
+    # Similar Visualizations Limit
+    SIMILAR_VIS_LIMIT: int = 10
+
     # Gold Standards Analysis Prompt
     GOLD_STANDARD_ANALYSIS_PROMPT: str = """
-Given the following HTML visualization, analyze it and generate a configuration that matches this JSON schema:
+    Given the following HTML visualization, analyze it and generate a configuration that matches this JSON schema:
 
-{json_schema}
+    {json_schema}
 
-IMPORTANT:
-- Extract every distinct, meaningful section of JavaScript or HTML as a separate snippet.
-- For each function, event handler, setup/configuration block, or logical code section, create a separate snippet.
-- Do NOT combine multiple unrelated code blocks into a single snippet.
-- Err on the side of more, smaller snippets rather than fewer, larger ones.
-- The allowed values for snippet_type are: lighting, material, animation, narration, ui_controls, renderer_settings, camera_setup, full_scene, miscellaneous.
-- If a snippet does not fit any of the above categories, use 'miscellaneous' as the snippet_type.
-- Do NOT invent new snippet_type values.
-- Return ONLY a JSON object matching the schema above.
-- All field constraints (lengths, allowed values, etc.) must be respected.
-- Do not include any markdown formatting.
-- You MUST include at least one snippet in the snippets array.
+    IMPORTANT:
+    - Extract every distinct, meaningful section of JavaScript or HTML as a separate snippet.
+    - For each function, event handler, setup/configuration block, or logical code section, create a separate snippet.
+    - Do NOT combine multiple unrelated code blocks into a single snippet.
+    - Err on the side of more, smaller snippets rather than fewer, larger ones.
+    - The allowed values for snippet_type are: lighting, material, animation, narration, ui_controls, renderer_settings, camera_setup, full_scene, miscellaneous.
+    - If a snippet does not fit any of the above categories, use 'miscellaneous' as the snippet_type.
+    - Do NOT invent new snippet_type values.
+    - Return ONLY a JSON object matching the schema above.
+    - All field constraints (lengths, allowed values, etc.) must be respected.
+    - Do not include any markdown formatting.
+    - You MUST include at least one snippet in the snippets array.
 
-HTML Content:
-{html_content}
-"""
+    HTML Content:
+    {html_content}
+    """
 
     # Enhancement Prompt for generating new visualizations
     ENHANCEMENT_PROMPT: str = """Given the following concept prompt: "{topic}" in the subject of {subject},
@@ -145,15 +148,14 @@ HTML Content:
     4. Do not include any markdown formatting.
     """
 
-    # Similar Visualizations Limit
-    SIMILAR_VIS_LIMIT: int = 10
-
     class Config:
         env_file = ".env"
         case_sensitive = True
+
 
 @lru_cache()
 def get_settings():
     return Settings()
 
-settings = get_settings() 
+
+settings = get_settings()

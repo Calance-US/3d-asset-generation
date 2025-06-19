@@ -1,28 +1,40 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Table, Float, DateTime, Text, JSON
-from sqlalchemy.orm import relationship
-from .database.db_config import Base
-from datetime import datetime
-from sqlalchemy.dialects.postgresql import UUID
-import uuid
 import json
-from typing import Dict, Any, Optional
+import uuid
+from datetime import datetime
+from typing import Any, Dict, Optional
+
 import sqlalchemy as sa
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+)
+from sqlalchemy.orm import relationship
+
+from .database.db_config import Base
 
 # Association table for many-to-many relationship between prompts and tags
 prompt_tags = Table(
-    'prompt_tags',
+    "prompt_tags",
     Base.metadata,
-    Column('prompt_id', Integer, ForeignKey('prompts.id')),
-    Column('tag_id', Integer, ForeignKey('tags.id'))
+    Column("prompt_id", Integer, ForeignKey("prompts.id")),
+    Column("tag_id", Integer, ForeignKey("tags.id")),
 )
 
 # Association table for many-to-many relationship between visualizations and tags
 visualization_tags = Table(
-    'visualization_tags',
+    "visualization_tags",
     Base.metadata,
-    Column('visualization_id', Integer, ForeignKey('visualizations.id')),
-    Column('tag_id', Integer, ForeignKey('tags.id'))
+    Column("visualization_id", Integer, ForeignKey("visualizations.id")),
+    Column("tag_id", Integer, ForeignKey("tags.id")),
 )
+
 
 class Prompt(Base):
     __tablename__ = "prompts"
@@ -41,6 +53,7 @@ class Prompt(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     tags = relationship("Tag", secondary=prompt_tags, back_populates="prompts")
 
+
 class Tag(Base):
     __tablename__ = "tags"
 
@@ -48,7 +61,10 @@ class Tag(Base):
     name = Column(String, unique=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     prompts = relationship("Prompt", secondary=prompt_tags, back_populates="tags")
-    visualizations = relationship("Visualization", secondary=visualization_tags, back_populates="tags")
+    visualizations = relationship(
+        "Visualization", secondary=visualization_tags, back_populates="tags"
+    )
+
 
 class HistoryEntry(Base):
     __tablename__ = "history"
@@ -68,9 +84,10 @@ class HistoryEntry(Base):
     supporting_narration_texts = Column(JSON, nullable=True, default=list)
     scene_description = Column(String)
     generation_time = Column(Float)
-    
+
     # Relationships
     prompt = relationship("Prompt")
+
 
 class Visualization(Base):
     __tablename__ = "visualizations"
@@ -83,7 +100,10 @@ class Visualization(Base):
     embedding = Column(JSON)  # Store embeddings as JSON for similarity search
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    tags = relationship("Tag", secondary=visualization_tags, back_populates="visualizations")
+    tags = relationship(
+        "Tag", secondary=visualization_tags, back_populates="visualizations"
+    )
+
 
 class GoldStandardUploadStatus(Base):
     __tablename__ = "gold_standard_upload_status"
@@ -103,8 +123,10 @@ class GoldStandardUploadStatus(Base):
         """Get the result field, converting JSON string to dict."""
         return json.loads(self.result) if self.result else None
 
+
 class SnippetMetadata(Base):
     """SQLAlchemy model for snippet metadata."""
+
     __tablename__ = "snippet_metadata"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))

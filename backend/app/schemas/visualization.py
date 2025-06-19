@@ -1,6 +1,8 @@
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+from pydantic import BaseModel
+
 
 class VisualizationBase(BaseModel):
     topic: str
@@ -8,8 +10,10 @@ class VisualizationBase(BaseModel):
     html_content: str
     config: Dict[str, Any]
 
+
 class VisualizationCreate(VisualizationBase):
     pass
+
 
 class VisualizationResponse(VisualizationBase):
     id: int
@@ -18,4 +22,4 @@ class VisualizationResponse(VisualizationBase):
     embedding: Optional[list] = None
 
     class Config:
-        from_attributes = True 
+        from_attributes = True

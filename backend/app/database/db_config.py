@@ -1,16 +1,18 @@
 """Database configuration."""
+
 import logging
+
 from sqlalchemy import create_engine
+from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import SQLAlchemyError
+
 from app.config.settings import settings
-from sqlalchemy.engine.url import make_url
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
-from sqlalchemy.engine.url import make_url
 url = make_url(settings.DATABASE_URL)
 
 # For SQLite, do not set pool_size, max_overflow, pool_timeout, pool_recycle
@@ -18,7 +20,9 @@ if url.get_backend_name() == "sqlite":
     engine = create_engine(
         settings.DATABASE_URL,
         echo=settings.DATABASE_ECHO,
-        connect_args={"check_same_thread": False} if settings.ENVIRONMENT == "development" else {}
+        connect_args={"check_same_thread": False}
+        if settings.ENVIRONMENT == "development"
+        else {},
     )
 else:
     engine = create_engine(
@@ -36,6 +40,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create Base class
 Base = declarative_base()
 
+
 def get_db():
     """Get database session."""
     db = SessionLocal()
@@ -43,6 +48,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def init_db():
     """Initialize database with proper error handling and logging."""
@@ -67,4 +73,4 @@ def init_db():
         raise
     except Exception as e:
         logger.error(f"Unexpected error during database initialization: {str(e)}")
-        raise 
+        raise
