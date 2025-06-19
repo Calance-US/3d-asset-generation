@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from 'react-toastify';
 import VectorStoreDashboard from './admin/VectorStoreDashboard';
+import ValidationMetrics from './admin/ValidationMetrics';
 import { Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, TablePagination, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -47,12 +48,123 @@ function Admin() {
     retry_count: 0,
     tags: []
   });
+
+  // Task Manager state
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
+  const [taskDetailsLoading, setTaskDetailsLoading] = useState(false);
+  const [taskPollingInterval, setTaskPollingInterval] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     loadPrompts();
     fetchGoldStandards();
   }, []);
+
+  // Cleanup polling interval when component unmounts or task changes
+  useEffect(() => {
+    return () => {
+      if (taskPollingInterval) {
+        clearInterval(taskPollingInterval);
+      }
+    };
+  }, [taskPollingInterval]);
+
+  // Fetch tasks list
+  const fetchTasks = async () => {
+    try {
+      setTasksLoading(true);
+      setTasksError(null);
+      const response = await fetch(`${BASE_URL}/admin/tasks`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch tasks');
+      }
+      const data = await response.json();
+      setTasks(data || []);
+    } catch (err) {
+      setTasksError('Error fetching tasks: ' + err.message);
+      toast.error('Failed to load tasks');
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  // Fetch detailed task information
+  const fetchTaskDetails = async (taskId) => {
+    try {
+      setTaskDetailsLoading(true);
+      const response = await fetch(`${BASE_URL}/admin/tasks/${taskId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch task details');
+      }
+      const data = await response.json();
+      setSelectedTaskDetails(data);
+    } catch (err) {
+      toast.error('Failed to load task details: ' + err.message);
+    } finally {
+      setTaskDetailsLoading(false);
+    }
+  };
+
+  // Start polling for selected task
+  const startTaskPolling = (taskId) => {
+    // Clear existing polling interval
+    if (taskPollingInterval) {
+      clearInterval(taskPollingInterval);
+    }
+
+    // Fetch initial data
+    fetchTaskDetails(taskId);
+
+    // Set up polling interval (10 seconds)
+    const interval = setInterval(() => {
+      fetchTaskDetails(taskId);
+    }, 10000);
+
+    setTaskPollingInterval(interval);
+  };
+
+  // Stop task polling
+  const stopTaskPolling = () => {
+    if (taskPollingInterval) {
+      clearInterval(taskPollingInterval);
+      setTaskPollingInterval(null);
+    }
+  };
+
+  // Handle task selection
+  const handleTaskSelect = (task) => {
+    setSelectedTask(task);
+    setSelectedTaskDetails(null);
+    startTaskPolling(task.id);
+  };
+
+  // Manual refresh task details
+  const refreshTaskDetails = () => {
+    if (selectedTask) {
+      fetchTaskDetails(selectedTask.id);
+    }
+  };
+
+  // Manual refresh tasks list
+  const refreshTasksList = () => {
+    fetchTasks();
+  };
+
+  // Load tasks when Task Manager tab is selected
+  useEffect(() => {
+    if (activeTab === 4) {
+      fetchTasks();
+    } else {
+      // Stop polling when switching away from Task Manager tab
+      stopTaskPolling();
+      setSelectedTask(null);
+      setSelectedTaskDetails(null);
+    }
+  }, [activeTab]);
 
   const loadPrompts = async () => {
     try {
@@ -89,7 +201,7 @@ function Admin() {
 
   const handleEditGoldStandard = (standard) => {
     setEditingGoldStandard(standard);
-      setEditForm({
+    setEditForm({
       id: standard.metadata.id || '',
       snippet_hash: standard.metadata.snippet_hash || '',
       topic: standard.metadata.topic || '',
@@ -127,8 +239,8 @@ function Admin() {
           metadata: {
             id: editForm.id,
             snippet_hash: editForm.snippet_hash,
-          topic: editForm.topic,
-          subject: editForm.subject,
+            topic: editForm.topic,
+            subject: editForm.subject,
             key_concepts: editForm.key_concepts,
             education_level: editForm.education_level,
             learning_objectives: editForm.learning_objectives,
@@ -146,11 +258,11 @@ function Admin() {
           }
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to update gold standard');
       }
-      
+
       toast.success('Gold standard updated successfully');
       setEditDialogOpen(false);
       fetchGoldStandards();
@@ -177,11 +289,11 @@ function Admin() {
       const response = await fetch(`${BASE_URL}/gold-standards/${index}`, {
         method: 'DELETE'
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to delete gold standard');
       }
-      
+
       // Refresh the list after deletion
       fetchGoldStandards();
       setError(null);
@@ -222,10 +334,10 @@ function Admin() {
       </div>
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
-        
-        <Tabs 
-          value={activeTab} 
-          onChange={(e, newValue) => setActiveTab(newValue)} 
+
+        <Tabs
+          value={activeTab}
+          onChange={(e, newValue) => setActiveTab(newValue)}
           className="mb-6"
           sx={{
             '& .MuiTab-root': {
@@ -242,13 +354,15 @@ function Admin() {
           <Tab label="Gold Standards" />
           <Tab label="Prompts" />
           <Tab label="FAISS Dashboard" />
+          <Tab label="Validation Metrics" />
+          <Tab label="Task Manager" />
         </Tabs>
 
         {activeTab === 0 && (
           <div className="space-y-6">
             <div className="bg-gray-800 rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">Gold Standards</h2>
-              
+
               {/* Multi-file Upload Section */}
               <div className="mb-6 bg-gray-700 rounded-lg p-4">
                 <h3 className="text-lg font-medium text-white mb-3">Upload Multiple Gold Standards</h3>
@@ -275,9 +389,9 @@ function Admin() {
                         Selected {multiUploadFiles.length} file(s)
                       </p>
                     )}
-        </div>
+                  </div>
 
-              <button
+                  <button
                     onClick={async () => {
                       if (multiUploadFiles.length === 0) {
                         toast.error('Please select files to upload');
@@ -320,7 +434,7 @@ function Admin() {
                               clearInterval(pollInterval);
                               setMultiUploadPolling(false);
                               setMultiUploadFiles([]);
-                              
+
                               if (statusData.status === 'completed') {
                                 toast.success('Files uploaded successfully');
                                 fetchGoldStandards(); // Refresh the list
@@ -340,14 +454,13 @@ function Admin() {
                       }
                     }}
                     disabled={multiUploadFiles.length === 0 || multiUploadPolling}
-                    className={`px-4 py-2 rounded transition-colors ${
-                      multiUploadFiles.length === 0 || multiUploadPolling
-                        ? 'bg-gray-500 cursor-not-allowed'
-                        : 'bg-blue-500 hover:bg-blue-600 text-white'
-                    }`}
-              >
+                    className={`px-4 py-2 rounded transition-colors ${multiUploadFiles.length === 0 || multiUploadPolling
+                      ? 'bg-gray-500 cursor-not-allowed'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                  >
                     {multiUploadPolling ? 'Uploading...' : 'Upload Files'}
-              </button>
+                  </button>
 
                   {multiUploadStatus && (
                     <div className="mt-2">
@@ -373,13 +486,13 @@ function Admin() {
                                     Error: {result.error}
                                   </p>
                                 )}
-          </div>
+                              </div>
                             ))}
-        </div>
-          </div>
-        )}
-          </div>
-        )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -412,16 +525,14 @@ function Admin() {
                               <TableCell className="text-gray-300">{standard.metadata.snippet_type}</TableCell>
                               <TableCell className="text-gray-300">{standard.metadata.summary}</TableCell>
                               <TableCell className="text-gray-300">
-                                <span className={`px-2 py-1 rounded-full text-xs ${
-                                  standard.metadata.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-                                }`}>
+                                <span className={`px-2 py-1 rounded-full text-xs ${standard.metadata.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                                  }`}>
                                   {standard.metadata.validation_status}
                                 </span>
                               </TableCell>
                               <TableCell className="text-gray-300">
-                                <span className={`px-2 py-1 rounded-full text-xs ${
-                                  standard.metadata.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-                                }`}>
+                                <span className={`px-2 py-1 rounded-full text-xs ${standard.metadata.validation_status === 'validated' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+                                  }`}>
                                   {standard.metadata.validation_status}
                                 </span>
                               </TableCell>
@@ -458,15 +569,15 @@ function Admin() {
                       rowsPerPageOptions={[5, 10, 25]}
                     />
                   </TableContainer>
-          </div>
-        )}
-      </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Edit Dialog */}
-        <Dialog 
-          open={editDialogOpen} 
+        <Dialog
+          open={editDialogOpen}
           onClose={() => setEditDialogOpen(false)}
           maxWidth="md"
           fullWidth
@@ -478,7 +589,7 @@ function Admin() {
             }
           }}
         >
-          <DialogTitle sx={{ 
+          <DialogTitle sx={{
             borderBottom: '1px solid #374151',
             padding: '16px 24px',
             '& .MuiTypography-root': { color: 'white' }
@@ -553,10 +664,10 @@ function Admin() {
                       },
                       '& .MuiInputLabel-root': { color: '#9CA3AF' },
                       '& .MuiInputBase-input': { color: 'white' }
-                      }}
-                    />
-                  </div>
+                    }}
+                  />
                 </div>
+              </div>
 
               {/* Content Section */}
               <div className="bg-gray-800 rounded-lg p-4">
@@ -580,7 +691,7 @@ function Admin() {
                       '& .MuiInputBase-input': { color: 'white' }
                     }}
                   /> */}
-                <div>
+                  <div>
                     <label className="block text-gray-300 mb-2">HTML Snippet</label>
                     <textarea
                       value={editForm.html_snippet}
@@ -588,8 +699,8 @@ function Admin() {
                       rows={8}
                       className="w-full p-3 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
                       placeholder="Enter HTML snippet..."
-                  />
-                </div>
+                    />
+                  </div>
                   <TextField
                     label="Summary"
                     value={editForm.summary}
@@ -755,28 +866,28 @@ function Admin() {
               </div>
             </div>
           </DialogContent>
-          <DialogActions sx={{ 
+          <DialogActions sx={{
             borderTop: '1px solid #374151',
             padding: '16px 24px'
           }}>
-            <Button 
+            <Button
               onClick={() => setEditDialogOpen(false)}
-              sx={{ 
+              sx={{
                 color: '#9CA3AF',
                 '&:hover': { backgroundColor: 'rgba(156, 163, 175, 0.1)' }
               }}
-                >
-                  Cancel
+            >
+              Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleEditSubmit}
               variant="contained"
-              sx={{ 
+              sx={{
                 backgroundColor: '#3B82F6',
                 '&:hover': { backgroundColor: '#2563EB' }
               }}
-                >
-                  Save Changes
+            >
+              Save Changes
             </Button>
           </DialogActions>
         </Dialog>
@@ -809,17 +920,17 @@ function Admin() {
                                 {tag}
                               </span>
                             ))}
-              </div>
+                          </div>
                         )}
-          </div>
+                      </div>
                     </div>
                     <div className="mt-2">
                       <p className="text-gray-300 whitespace-pre-wrap">{prompt.content}</p>
                     </div>
                   </div>
                 ))}
-        </div>
-      )}
+              </div>
+            )}
           </div>
         )}
 
@@ -828,9 +939,249 @@ function Admin() {
             <VectorStoreDashboard />
           </div>
         )}
+
+        {activeTab === 3 && (
+          <div className="bg-gray-800 shadow rounded-lg p-6">
+            <ValidationMetrics />
+          </div>
+        )}
+
+        {activeTab === 4 && (
+          <div className="bg-gray-800 shadow rounded-lg p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-semibold text-white">Task Manager</h2>
+              <Button
+                variant="outlined"
+                onClick={refreshTasksList}
+                disabled={tasksLoading}
+                className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-white"
+              >
+                {tasksLoading ? 'Loading...' : 'Refresh Tasks'}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Tasks List */}
+              <div className="bg-gray-700 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-white mb-4">Active Tasks</h3>
+
+                {tasksError && (
+                  <div className="bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded mb-4">
+                    {tasksError}
+                  </div>
+                )}
+
+                {tasksLoading ? (
+                  <div className="text-gray-400 text-center py-8">Loading tasks...</div>
+                ) : tasks.length === 0 ? (
+                  <div className="text-gray-400 text-center py-8">No tasks found</div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {tasks.map((task) => (
+                      <div
+                        key={task.id}
+                        onClick={() => handleTaskSelect(task)}
+                        className={`p-3 rounded cursor-pointer transition-colors ${selectedTask?.id === task.id
+                          ? 'bg-blue-600 border border-blue-400'
+                          : 'bg-gray-600 hover:bg-gray-500 border border-gray-500'
+                          }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                              {task.id}
+                            </p>
+                            <p className="text-xs text-gray-300 mt-1">
+                              Type: {task.task_type}
+                            </p>
+                            <div className="flex items-center mt-2">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${task.status === 'completed' ? 'bg-green-900 text-green-200' :
+                                task.status === 'failed' ? 'bg-red-900 text-red-200' :
+                                  task.status === 'running' ? 'bg-blue-900 text-blue-200' :
+                                    'bg-yellow-900 text-yellow-200'
+                                }`}>
+                                {task.status}
+                              </span>
+                              <span className="text-xs text-gray-400 ml-2">
+                                {task.progress_percentage}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {task.current_stage && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Stage: {task.current_stage}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1">
+                          Created: {new Date(task.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Task Details */}
+              <div className="bg-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium text-white">Task Details</h3>
+                  {selectedTask && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={refreshTaskDetails}
+                      disabled={taskDetailsLoading}
+                      className="text-blue-400 border-blue-400 hover:bg-blue-400 hover:text-white"
+                    >
+                      {taskDetailsLoading ? 'Loading...' : 'Refresh'}
+                    </Button>
+                  )}
+                </div>
+
+                {!selectedTask ? (
+                  <div className="text-gray-400 text-center py-8">
+                    Select a task to view details
+                  </div>
+                ) : taskDetailsLoading ? (
+                  <div className="text-gray-400 text-center py-8">Loading task details...</div>
+                ) : selectedTaskDetails ? (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {/* Task Overview */}
+                    <div className="bg-gray-800 rounded p-3">
+                      <h4 className="text-sm font-medium text-white mb-2">Overview</h4>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-gray-400">ID:</span>
+                          <p className="text-white font-mono text-xs break-all">{selectedTaskDetails.id}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Type:</span>
+                          <p className="text-white">{selectedTaskDetails.task_type}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Status:</span>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${selectedTaskDetails.status === 'completed' ? 'bg-green-900 text-green-200' :
+                            selectedTaskDetails.status === 'failed' ? 'bg-red-900 text-red-200' :
+                              selectedTaskDetails.status === 'running' ? 'bg-blue-900 text-blue-200' :
+                                'bg-yellow-900 text-yellow-200'
+                            }`}>
+                            {selectedTaskDetails.status}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Progress:</span>
+                          <p className="text-white">{selectedTaskDetails.progress_percentage}%</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Timestamps */}
+                    <div className="bg-gray-800 rounded p-3">
+                      <h4 className="text-sm font-medium text-white mb-2">Timeline</h4>
+                      <div className="space-y-1 text-xs">
+                        <div>
+                          <span className="text-gray-400">Created:</span>
+                          <span className="text-white ml-2">
+                            {selectedTaskDetails.created_at ? new Date(selectedTaskDetails.created_at).toLocaleString() : 'N/A'}
+                          </span>
+                        </div>
+                        {selectedTaskDetails.started_at && (
+                          <div>
+                            <span className="text-gray-400">Started:</span>
+                            <span className="text-white ml-2">
+                              {new Date(selectedTaskDetails.started_at).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        {selectedTaskDetails.completed_at && (
+                          <div>
+                            <span className="text-gray-400">Completed:</span>
+                            <span className="text-white ml-2">
+                              {new Date(selectedTaskDetails.completed_at).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        {selectedTaskDetails.expires_at && (
+                          <div>
+                            <span className="text-gray-400">Expires:</span>
+                            <span className="text-white ml-2">
+                              {new Date(selectedTaskDetails.expires_at).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Current Stage */}
+                    {selectedTaskDetails.current_stage && (
+                      <div className="bg-gray-800 rounded p-3">
+                        <h4 className="text-sm font-medium text-white mb-2">Current Stage</h4>
+                        <p className="text-blue-400 text-sm">{selectedTaskDetails.current_stage}</p>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {selectedTaskDetails.error_message && (
+                      <div className="bg-red-900 border border-red-700 rounded p-3">
+                        <h4 className="text-sm font-medium text-red-200 mb-2">Error</h4>
+                        <p className="text-red-100 text-xs">{selectedTaskDetails.error_message}</p>
+                      </div>
+                    )}
+
+                    {/* Stages */}
+                    {selectedTaskDetails.stages && selectedTaskDetails.stages.length > 0 && (
+                      <div className="bg-gray-800 rounded p-3">
+                        <h4 className="text-sm font-medium text-white mb-3">Stages</h4>
+                        <div className="space-y-2">
+                          {selectedTaskDetails.stages.map((stage, index) => (
+                            <div key={index} className="border-l-2 border-gray-600 pl-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm text-white font-medium">{stage.name}</span>
+                                <div className="flex items-center space-x-2">
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${stage.status === 'completed' ? 'bg-green-900 text-green-200' :
+                                    stage.status === 'failed' ? 'bg-red-900 text-red-200' :
+                                      stage.status === 'running' ? 'bg-blue-900 text-blue-200' :
+                                        'bg-yellow-900 text-yellow-200'
+                                    }`}>
+                                    {stage.status}
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    {stage.progress_percentage}%
+                                  </span>
+                                </div>
+                              </div>
+                              {stage.message && (
+                                <p className="text-xs text-gray-400 mt-1">{stage.message}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Auto-refresh indicator */}
+                    {taskPollingInterval && (
+                      <div className="bg-blue-900 border border-blue-700 rounded p-2">
+                        <p className="text-blue-200 text-xs flex items-center">
+                          <span className="animate-pulse mr-2">●</span>
+                          Auto-refreshing every 10 seconds
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-red-400 text-center py-8">
+                    Failed to load task details
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default Admin; 
+export default Admin;

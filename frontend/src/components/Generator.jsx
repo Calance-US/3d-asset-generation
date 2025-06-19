@@ -5,6 +5,7 @@ import { ChevronUpIcon } from '@heroicons/react/20/solid';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { BASE_URL } from '../lib/utils';
+import ValidationStatus from './validation/ValidationStatus';
 
 export default function Generator() {
   const [prompt, setPrompt] = useState("");
@@ -15,6 +16,11 @@ export default function Generator() {
   const [showHistory, setShowHistory] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [taskId, setTaskId] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [currentStage, setCurrentStage] = useState("");
+  const [stageMessage, setStageMessage] = useState("");
+  const [canCancel, setCanCancel] = useState(false);
   const iframeRef = useRef(null);
   const [config, setConfig] = useState({
     topic_name: "",
@@ -52,6 +58,8 @@ export default function Generator() {
   const [enhancing, setEnhancing] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   // Load history on component mount
   useEffect(() => {
@@ -84,42 +92,57 @@ export default function Generator() {
     }
   };
 
+  async function handleCancelTask() {
+    if (!taskId || !canCancel) {
+      console.warn("No active task to cancel");
+      return;
+    }
+
+    try {
+      console.info(`Cancelling task: ${taskId}`);
+      const response = await fetch(`${BASE_URL}/async-visualizations/cancel/${taskId}`, {
+        method: "DELETE"
+      });
+
+      if (response.ok) {
+        console.info("Task cancelled successfully");
+        setLoading(false);
+        setCanCancel(false);
+        setProgress(0);
+        setCurrentStage("cancelled");
+        setStageMessage("Task was cancelled by user");
+        setError("Generation was cancelled");
+      } else {
+        console.warn("Failed to cancel task");
+      }
+    } catch (err) {
+      console.error("Error cancelling task:", err);
+    }
+  }
+
   async function handleGenerate() {
     if (!prompt) {
       console.warn("Attempting to generate with empty prompt");
       return;
     }
 
+    let taskId = null;
+    let pollInterval = null;
+
     try {
       setLoading(true);
       setError(null);
-      console.info("Starting generation process...");
-      console.debug("Request details:", {
-        prompt,
-        provider,
-        subject,
-        config: {
-          ...config,
-          three_js_url: "https://esm.sh/three@0.155.0",
-          orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
-          camera_controls: "OrbitControls",
-          curve_points: [{ x: 0, y: 0, z: 0 }],
-          animation_speed: 1.0,
-          tts_language: "en-US",
-          tts_rate: 1.0,
-          tts_pitch: 1.0,
-          renderer: {
-            antialias: config?.renderer?.antialias ?? true,
-            shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
-            shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
-            outputColorSpace: config?.renderer?.outputColorSpace || "SRGBColorSpace",
-            toneMapping: config?.renderer?.toneMapping || "ACESFilmicToneMapping",
-            toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
-          }
-        }
-      });
+      setValidationResult(null);
+      setIsValidating(false);
+      setTaskId(null);
+      setProgress(0);
+      setCurrentStage("");
+      setStageMessage("");
+      setCanCancel(false);
+      console.info("Starting async generation process...");
 
-      const response = await fetch(`${BASE_URL}/visualizations/generate`, {
+      // Step 1: Start async task
+      const startResponse = await fetch(`${BASE_URL}/async-visualizations/generate-async`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -128,44 +151,125 @@ export default function Generator() {
           topic: prompt,
           provider: provider,
           subject: subject,
-          config: {
-            ...config,
-            three_js_url: "https://esm.sh/three@0.155.0",
-            orbit_controls_url: "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
-            camera_controls: "OrbitControls",
-            curve_points: [{ x: 0, y: 0, z: 0 }],
-            animation_speed: 1.0,
-            tts_language: "en-US",
-            tts_rate: 1.0,
-            tts_pitch: 1.0,
-            renderer: {
-              antialias: config?.renderer?.antialias ?? true,
-              shadowMapEnabled: config?.renderer?.shadowMapEnabled ?? true,
-              shadowMapType: config?.renderer?.shadowMapType || "PCFSoftShadowMap",
-              outputColorSpace: config?.renderer?.outputColorSpace || "SRGBColorSpace",
-              toneMapping: config?.renderer?.toneMapping || "ACESFilmicToneMapping",
-              toneMappingExposure: config?.renderer?.toneMappingExposure ?? 1.0
-            }
-          }
+          config: config || null
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Generation failed:", errorData);
-        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+      if (!startResponse.ok) {
+        const errorData = await startResponse.json();
+        console.error("Failed to start async generation:", errorData);
+        throw new Error(errorData.detail || `HTTP error! status: ${startResponse.status}`);
       }
 
-      const data = await response.json();
-      console.debug("Response data:", data);
-      
-      setHtml(data.html);
-      console.info("Generation completed successfully");
+      const startData = await startResponse.json();
+      taskId = startData.task_id;
+      setTaskId(taskId);
+      setCanCancel(true);
+      console.info(`Started async task: ${taskId}`);
+
+      // Step 2: Poll for task status with progress updates
+      const pollTaskStatus = async () => {
+        try {
+          const statusResponse = await fetch(`${BASE_URL}/async-visualizations/status/${taskId}`);
+
+          if (!statusResponse.ok) {
+            throw new Error(`Failed to get task status: ${statusResponse.status}`);
+          }
+
+          const statusData = await statusResponse.json();
+          console.debug("Task status:", statusData);
+
+          // Update progress information
+          setProgress(statusData.overall_progress || 0);
+          if (statusData.current_stage) {
+            setCurrentStage(statusData.current_stage.name || "");
+            setStageMessage(statusData.current_stage.message || "");
+            console.info(`Progress: ${statusData.overall_progress}% - ${statusData.current_stage.name}: ${statusData.current_stage.message}`);
+          }
+
+          // Check if task is complete
+          if (statusData.status === "completed") {
+            clearInterval(pollInterval);
+
+            // Get the result
+            const resultResponse = await fetch(`${BASE_URL}/async-visualizations/result/${taskId}`);
+            if (!resultResponse.ok) {
+              throw new Error(`Failed to get task result: ${resultResponse.status}`);
+            }
+
+            const html = await resultResponse.text();
+            setHtml(html);
+
+            // Extract validation results from stages if available
+            const validationStages = statusData.stages?.filter(stage =>
+              stage.name.startsWith("validation_attempt")
+            );
+
+            if (validationStages && validationStages.length > 0) {
+              const lastValidation = validationStages[validationStages.length - 1];
+              if (lastValidation.details) {
+                setValidationResult({
+                  quality_score: lastValidation.details.quality_score,
+                  errors_count: lastValidation.details.errors_count || 0,
+                  overall_success: lastValidation.status === "completed"
+                });
+              }
+            }
+
+            console.info("Async generation completed successfully");
+            setProgress(100);
+            setCurrentStage("completed");
+            setStageMessage("Generation completed successfully");
+            setCanCancel(false);
+            setLoading(false);
+            return;
+          }
+
+          // Check if task failed
+          if (statusData.status === "failed") {
+            clearInterval(pollInterval);
+            throw new Error(`Task failed: ${statusData.error || "Unknown error"}`);
+          }
+
+          // Task is still running, continue polling
+        } catch (pollError) {
+          console.error("Error polling task status:", pollError);
+          clearInterval(pollInterval);
+          throw pollError;
+        }
+      };
+
+      // Start polling every 2 seconds
+      pollInterval = setInterval(pollTaskStatus, 2000);
+
+      // Initial status check
+      await pollTaskStatus();
+
     } catch (err) {
-      console.error("Error during generation:", err);
+      console.error("Error during async generation:", err);
       setError(`Error generating visualization: ${err.message}`);
-    } finally {
+      setProgress(0);
+      setCurrentStage("error");
+      setStageMessage(err.message);
+      setCanCancel(false);
       setLoading(false);
+
+      // Clean up polling
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+
+      // Optionally cancel the task if it was started
+      if (taskId) {
+        try {
+          await fetch(`${BASE_URL}/async-visualizations/cancel/${taskId}`, {
+            method: "DELETE"
+          });
+          console.info(`Cancelled task: ${taskId}`);
+        } catch (cancelError) {
+          console.warn("Failed to cancel task:", cancelError);
+        }
+      }
     }
   }
 
@@ -203,7 +307,7 @@ export default function Generator() {
       const enhancedData = await response.json();
       console.info("Successfully received enhanced configuration");
       console.debug("Enhanced configuration:", enhancedData);
-      
+
       setConfig(prev => {
         const newConfig = {
           ...prev,
@@ -247,7 +351,7 @@ export default function Generator() {
     try {
       // Set the prompt text
       setPrompt(entry.user_query || entry.prompt || '');
-      
+
       // Set the provider and subject if available
       if (entry.provider && entry.provider !== 'Unknown') {
         setProvider(entry.provider);
@@ -290,14 +394,14 @@ export default function Generator() {
           interactive_description: entry.config.interactive_description || '',
           animated_elements: entry.config.animated_elements || '',
           scene_description: entry.config.scene_description || '',
-          
+
           // Complex objects
           components: components,
           materials: materials,
           lights: lights,
           intro_narration_texts: introNarrationTexts,
           supporting_narration_texts: supportingNarrationTexts,
-          
+
           // Required fields with defaults
           three_js_url: entry.config.three_js_url || "https://esm.sh/three@0.155.0",
           orbit_controls_url: entry.config.orbit_controls_url || "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls",
@@ -307,7 +411,7 @@ export default function Generator() {
           tts_language: entry.config.tts_language || "en-US",
           tts_rate: entry.config.tts_rate || 1.0,
           tts_pitch: entry.config.tts_pitch || 1.0,
-          
+
           // Renderer settings
           renderer: {
             antialias: renderSettings.antialias ?? true,
@@ -436,7 +540,7 @@ export default function Generator() {
 
       const data = await response.json();
       console.debug("Regeneration response data:", data);
-      
+
       setHtml(data.html);
       console.info("Regeneration completed successfully");
     } catch (err) {
@@ -609,8 +713,8 @@ export default function Generator() {
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <p className="text-sm text-gray-300">
-                              {(entry.user_query || entry.prompt) && (entry.user_query || entry.prompt).length > 100 
-                                ? `${(entry.user_query || entry.prompt).substring(0, 97)}...` 
+                              {(entry.user_query || entry.prompt) && (entry.user_query || entry.prompt).length > 100
+                                ? `${(entry.user_query || entry.prompt).substring(0, 97)}...`
                                 : entry.user_query || entry.prompt || 'No prompt'}
                             </p>
                             <p className="text-xs text-gray-400 mt-2">
@@ -991,10 +1095,10 @@ export default function Generator() {
                                   value={light.light_type}
                                   onChange={(e) => {
                                     const newLights = [...config.lights];
-                                    newLights[index] = { 
-                                      ...light, 
+                                    newLights[index] = {
+                                      ...light,
                                       light_type: e.target.value,
-                                      light_class: e.target.value 
+                                      light_class: e.target.value
                                     };
                                     setConfig(prev => ({ ...prev, lights: newLights }));
                                   }}
@@ -1056,11 +1160,11 @@ export default function Generator() {
                             onClick={() => {
                               setConfig(prev => ({
                                 ...prev,
-                                lights: [...prev.lights, { 
-                                  light_type: 'AmbientLight', 
+                                lights: [...prev.lights, {
+                                  light_type: 'AmbientLight',
                                   light_class: 'AmbientLight',
-                                  light_color: '#ffffff', 
-                                  intensity: 1.0 
+                                  light_color: '#ffffff',
+                                  intensity: 1.0
                                 }]
                               }));
                             }}
@@ -1169,7 +1273,7 @@ export default function Generator() {
                         {/* Narration Texts */}
                         <div className="space-y-4">
                           <h4 className="text-md font-medium">Narration Texts</h4>
-                          
+
                           {/* Intro Narration */}
                           <div className="space-y-2">
                             <h5 className="text-sm font-medium text-gray-300">Introduction</h5>
@@ -1235,21 +1339,51 @@ export default function Generator() {
                   <button
                     onClick={handleGenerate}
                     disabled={loading}
-                    className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${
-                      loading ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
+                    className={`flex-1 flex flex-col justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 ${loading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                   >
-                    {loading ? 'Generating...' : 'Generate Scene'}
+                    {loading ? (
+                      <div className="flex flex-col items-center space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Generating...</span>
+                        </div>
+                        {progress > 0 && (
+                          <div className="w-full bg-purple-800 rounded-full h-1.5">
+                            <div
+                              className="bg-white h-1.5 rounded-full transition-all duration-300"
+                              style={{ width: `${progress}%` }}
+                            ></div>
+                          </div>
+                        )}
+                        {currentStage && (
+                          <div className="text-xs text-purple-200">
+                            {currentStage}: {stageMessage}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      'Generate Scene'
+                    )}
                   </button>
+
+                  {/* Cancel button for async tasks */}
+                  {canCancel && loading && (
+                    <button
+                      onClick={handleCancelTask}
+                      className="flex justify-center py-2 px-4 border border-red-500 rounded-md shadow-sm text-sm font-medium text-red-500 bg-transparent hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                      Cancel
+                    </button>
+                  )}
 
                   {/* Show retrieval button only in development mode */}
                   {process.env.NODE_ENV === 'development' && (
                     <button
                       onClick={handleRetrieveSimilar}
                       disabled={loading}
-                      className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 ${
-                        loading ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
+                      className={`flex-1 flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-pink-600 hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 ${loading ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                     >
                       {loading ? 'Retrieving...' : 'Show Retrieval Results'}
                     </button>
@@ -1330,6 +1464,12 @@ export default function Generator() {
                       title="3D Visualization"
                     />
                   </div>
+
+                  {/* Validation Status */}
+                  <ValidationStatus
+                    validationResult={validationResult}
+                    isValidating={isValidating}
+                  />
                 </div>
               )}
 
@@ -1354,7 +1494,7 @@ export default function Generator() {
                   {showConfig && (
                     <div className="bg-gray-800 rounded-lg p-4 space-y-4">
                       <h3 className="text-lg font-semibold mb-4">Visualization Configuration</h3>
-                      
+
                       {/* Renderer Settings */}
                       <div className="space-y-2">
                         <h4 className="text-md font-medium">Renderer Settings</h4>
@@ -1437,4 +1577,4 @@ export default function Generator() {
       </div>
     </div>
   );
-} 
+}

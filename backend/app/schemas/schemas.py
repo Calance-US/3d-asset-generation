@@ -287,6 +287,7 @@ class SuccessResponse(BaseModel):
 
 class HTMLResponse(BaseModel):
     html: str
+    validation_results: Optional[Dict[str, Any]] = None
 
 
 class ModelsResponse(BaseModel):
@@ -342,7 +343,7 @@ class RetrieveSimilarResponse(BaseModel):
 class GoldStandardCreate(BaseModel):
     html: str
     config: Dict[str, Any]
-    metadata: Dict[str, Any] = None
+    metadata: Dict[str, Any] = {}
 
 
 class GoldStandardUpdate(BaseModel):
@@ -353,8 +354,8 @@ class GoldStandardUpdate(BaseModel):
 class GoldStandardResponse(BaseModel):
     id: int
     metadata: Dict[str, Any]
-    distance: float = None
-    html: str = None
+    distance: Optional[float] = None
+    html: Optional[str] = None
 
 
 class HtmlAnalysisRequest(BaseModel):

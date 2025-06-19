@@ -4,6 +4,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.database.db_config import get_db
@@ -19,7 +20,7 @@ class MetadataService:
         self.db = db
 
     async def add_snippet(
-        self, snippet_data: Dict[str, Any], faiss_id: int = None
+        self, snippet_data: Dict[str, Any], faiss_id: Optional[int] = None
     ) -> SnippetMetadata:
         """Add a new snippet to the metadata store, optionally setting faiss_id."""
         try:
@@ -67,7 +68,6 @@ class MetadataService:
         return self.db.query(SnippetMetadata).filter_by(upload_id=upload_id).all()
 
 
-def get_metadata_service() -> MetadataService:
+def get_metadata_service(db: Session = Depends(get_db)) -> MetadataService:
     """Get a metadata service instance with a database session."""
-    db = next(get_db())
     return MetadataService(db)

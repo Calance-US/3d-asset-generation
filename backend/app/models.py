@@ -11,6 +11,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Table,
     Text,
@@ -51,7 +52,10 @@ class Prompt(Base):
     interactive_features = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
     tags = relationship("Tag", secondary=prompt_tags, back_populates="prompts")
+    validation_errors = relationship("ValidationError", back_populates="prompt")
 
 
 class Tag(Base):
@@ -100,9 +104,17 @@ class Visualization(Base):
     embedding = Column(JSON)  # Store embeddings as JSON for similarity search
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Enhanced error tracking fields
+    generation_attempts = Column(Integer, default=1)
+    final_quality_score = Column(Numeric(3, 1), nullable=True)
+    validation_errors_count = Column(Integer, default=0)
+
+    # Relationships
     tags = relationship(
         "Tag", secondary=visualization_tags, back_populates="visualizations"
     )
+    validation_errors = relationship("ValidationError", back_populates="visualization")
 
 
 class GoldStandardUploadStatus(Base):
@@ -122,6 +134,31 @@ class GoldStandardUploadStatus(Base):
     def get_result(self) -> Optional[Dict[str, Any]]:
         """Get the result field, converting JSON string to dict."""
         return json.loads(self.result) if self.result else None
+
+
+class ValidationError(Base):
+    """SQLAlchemy model for validation errors."""
+
+    __tablename__ = "validation_errors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    visualization_id = Column(Integer, ForeignKey("visualizations.id"), nullable=True)
+    prompt_id = Column(Integer, ForeignKey("prompts.id"), nullable=True)
+    phase = Column(String(50), nullable=False, index=True)
+    severity = Column(String(20), nullable=False, index=True)
+    error_type = Column(String(100), nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    location = Column(Text, nullable=True)
+    suggestion = Column(Text, nullable=True)
+    context = Column(Text, nullable=True)
+    attempt_number = Column(Integer, nullable=False, default=1)
+    quality_score = Column(Numeric(3, 1), nullable=True)
+    provider = Column(String(20), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    visualization = relationship("Visualization", back_populates="validation_errors")
+    prompt = relationship("Prompt", back_populates="validation_errors")
 
 
 class SnippetMetadata(Base):
@@ -148,3 +185,100 @@ class SnippetMetadata(Base):
     education_level = Column(String)
     learning_objectives = Column(String)
     faiss_id = Column(sa.BigInteger, unique=True, nullable=True)
+
+
+class AsyncTask(Base):
+    """SQLAlchemy model for async task management."""
+
+    __tablename__ = "async_tasks"
+
+    id = Column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True
+    )
+    task_type = Column(
+        String(50), nullable=False, index=True
+    )  # visualization_generation, batch_validation, etc.
+    status = Column(
+        String(20), nullable=False, index=True, default="pending"
+    )  # pending, running, completed, failed, cancelled, timeout
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True
+    )
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    request_data = Column(JSON, nullable=False)  # Original request parameters
+    result = Column(JSON, nullable=True)  # Final task result
+    error_message = Column(Text, nullable=True)  # Error details if task failed
+    progress_percentage = Column(Integer, default=0)  # Overall progress (0-100)
+    current_stage = Column(String(50), nullable=True)  # Current stage name
+    total_stages = Column(Integer, default=1)  # Total number of stages
+    expires_at = Column(DateTime, nullable=True)  # When task should be cleaned up
+
+    # Relationships
+    stages = relationship(
+        "AsyncTaskStage", back_populates="task", cascade="all, delete-orphan"
+    )
+
+    def set_request_data(self, data: Dict[str, Any]):
+        """Set the request_data field, converting dict to JSON."""
+        self.request_data = data
+
+    def get_request_data(self) -> Dict[str, Any]:
+        """Get the request_data field."""
+        return self.request_data or {}
+
+    def set_result(self, result: Dict[str, Any]):
+        """Set the result field, converting dict to JSON."""
+        self.result = result
+
+    def get_result(self) -> Optional[Dict[str, Any]]:
+        """Get the result field."""
+        return self.result
+
+    def is_finished(self) -> bool:
+        """Check if task is in a finished state."""
+        return self.status in ["completed", "failed", "cancelled", "timeout"]
+
+    def is_expired(self) -> bool:
+        """Check if task has expired."""
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() > self.expires_at
+
+
+class AsyncTaskStage(Base):
+    """SQLAlchemy model for async task stages."""
+
+    __tablename__ = "async_task_stages"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    task_id = Column(String(36), ForeignKey("async_tasks.id"), nullable=False)
+    name = Column(
+        String(50), nullable=False
+    )  # llm_generation, validation_attempt_1, etc.
+    status = Column(
+        String(20), nullable=False, default="pending"
+    )  # pending, running, completed, failed
+    order_index = Column(Integer, nullable=False)  # Order of stage execution
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    progress_percentage = Column(Integer, default=0)  # Stage progress (0-100)
+    message = Column(Text, nullable=True)  # Status message
+    details = Column(JSON, nullable=True)  # Additional stage details
+    error_message = Column(Text, nullable=True)  # Error details if stage failed
+
+    # Relationships
+    task = relationship("AsyncTask", back_populates="stages")
+
+    def set_details(self, details: Dict[str, Any]):
+        """Set the details field, converting dict to JSON."""
+        self.details = details
+
+    def get_details(self) -> Dict[str, Any]:
+        """Get the details field."""
+        return self.details or {}
+
+    def is_finished(self) -> bool:
+        """Check if stage is in a finished state."""
+        return self.status in ["completed", "failed"]

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional, Tuple
 
 import faiss
 import numpy as np
@@ -77,14 +78,30 @@ class PromptSelector:
                 return
 
             # Get the dimension from the first prompt with an embedding
-            dimension = len(prompts_with_embeddings[0].embedding)
+            first_embedding = prompts_with_embeddings[0].embedding
+            if isinstance(first_embedding, list):
+                dimension = len(first_embedding)
+            else:
+                # Handle case where embedding might be stored differently
+                dimension = 384  # Default dimension for MiniLM model
+
             self.index = faiss.IndexFlatL2(dimension)
 
             # Convert embeddings to numpy array and add to index
-            embeddings = np.array(
-                [p.embedding for p in prompts_with_embeddings], dtype=np.float32
-            )
-            self.index.add(embeddings)
+            embeddings = []
+            for p in prompts_with_embeddings:
+                if isinstance(p.embedding, list):
+                    embeddings.append(p.embedding)
+                else:
+                    # Skip prompts with invalid embeddings
+                    continue
+
+            if embeddings:
+                embeddings_array = np.array(embeddings, dtype=np.float32)
+                # Ensure array is 2D for FAISS
+                if embeddings_array.ndim == 1:
+                    embeddings_array = embeddings_array.reshape(1, -1)
+                self.index.add(embeddings_array)
 
             logger.info(
                 "FAISS index initialized",
@@ -102,8 +119,8 @@ class PromptSelector:
             raise
 
     def select_prompt(
-        self, user_query: str, subject: str | None = None
-    ) -> tuple[str, str]:
+        self, user_query: str, subject: Optional[str] = None
+    ) -> Tuple[str, str]:
         """Select the most appropriate prompt based on the user query and subject."""
         try:
             if not self.index or not self.prompts:
@@ -234,7 +251,7 @@ class PromptSelector:
             return "physics", "generic"  # Return default values on error
 
     def get_prompt_content(
-        self, subject: str, topic: str, user_topic: str | None = None
+        self, subject: str, topic: str, user_topic: Optional[str] = None
     ) -> str:
         """Get the content of a prompt for the given subject and topic."""
         try:
@@ -340,7 +357,11 @@ class PromptSelector:
                 return
 
             # Create FAISS index
-            dimension = len(self.prompts[0].embedding)
+            first_embedding = self.prompts[0].embedding
+            if isinstance(first_embedding, list):
+                dimension = len(first_embedding)
+            else:
+                dimension = 384  # Default dimension for MiniLM model
             self.index = faiss.IndexFlatIP(
                 dimension
             )  # Use inner product for cosine similarity
@@ -388,10 +409,24 @@ class PromptSelector:
 
             for prompt in prompts_without_embeddings:
                 # Generate embedding for the prompt
-                embedding = self.model.encode(
-                    prompt.content, convert_to_numpy=True, normalize_embeddings=True
+                content = (
+                    prompt.content
+                    if isinstance(prompt.content, str)
+                    else str(prompt.content)
                 )
-                prompt.embedding = embedding.tolist()
+                embedding = self.model.encode(
+                    content, convert_to_numpy=True, normalize_embeddings=True
+                )
+                # Convert to list for JSON storage
+                if hasattr(embedding, "tolist"):
+                    embedding_list = embedding.tolist()
+                elif isinstance(embedding, np.ndarray):
+                    embedding_list = embedding.tolist()
+                else:
+                    embedding_list = list(embedding)
+
+                # Update the prompt object (SQLAlchemy will handle the column assignment)
+                prompt.embedding = embedding_list
                 prompt.updated_at = datetime.utcnow()
 
             # Save changes to database

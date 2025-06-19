@@ -22,4 +22,7 @@ class EmbeddingService:
     @classmethod
     def generate_embedding(cls, text: str) -> np.ndarray:
         model = cls.get_model()
-        return model.encode(text)
+        embedding = model.encode(text)
+        return (
+            np.array(embedding) if not isinstance(embedding, np.ndarray) else embedding
+        )

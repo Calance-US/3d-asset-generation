@@ -25,10 +25,13 @@ async def get_similar_visualizations(
 
 
 @router.get("/diverse-examples", response_model=List[Dict[str, Any]])
-async def get_diverse_examples(rag_service: RAGService = Depends(get_rag_service)):
+async def get_diverse_examples(
+    rag_service: RAGService = Depends(get_rag_service),
+    db: Session = Depends(get_db),
+):
     """Get one example of each visualization type from the vector store."""
     try:
-        return await rag_service.get_diverse_examples()
+        return await rag_service.get_diverse_examples(db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

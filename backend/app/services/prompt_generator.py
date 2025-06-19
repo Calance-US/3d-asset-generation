@@ -11,7 +11,8 @@ class PromptGenerator:
     def __init__(self):
         """Initialize the prompt generator with templates and schemas."""
         self.base_path = Path(__file__).parent.parent / "prompts"
-        self.template_path = self.base_path / "template.prompt.txt"
+        self.template_path = self.base_path / "enhanced_template.prompt.txt"
+        self.fallback_template_path = self.base_path / "template.prompt.txt"
         self.schema_path = self.base_path / "template.json"
 
         # Initialize Jinja2 environment
@@ -22,7 +23,7 @@ class PromptGenerator:
         self.schema = self._load_schema()
 
         logger.info(
-            "Initialized PromptGenerator",
+            "Initialized PromptGenerator with enhanced template",
             extra={"action": "init", "template_directory": str(self.base_path)},
         )
 
@@ -64,11 +65,15 @@ class PromptGenerator:
                 )
                 raise ValueError("Renderer configuration is required")
 
+            # Add validation-specific template variables
+            merged_config = self._add_validation_context(merged_config)
+
             logger.debug(
-                "Renderer configuration",
+                "Enhanced configuration with validation context",
                 extra={
                     "action": "generate_prompt",
                     "renderer_config": merged_config["renderer"],
+                    "has_validation_context": "subject" in merged_config,
                 },
             )
 
@@ -77,7 +82,7 @@ class PromptGenerator:
             prompt = template.render(**merged_config)
 
             logger.info(
-                "Prompt generated",
+                "Enhanced prompt generated with validation rules",
                 extra={"action": "generate_prompt", "prompt_length": len(prompt)},
             )
             return prompt
@@ -240,10 +245,17 @@ class PromptGenerator:
             raise
 
     def _load_template(self) -> str:
-        """Load the template file."""
+        """Load the template file, with fallback to original template."""
         try:
-            with open(self.template_path, "r") as f:
-                return f.read()
+            # Try to load enhanced template first
+            if self.template_path.exists():
+                with open(self.template_path, "r") as f:
+                    logger.info("Using enhanced template for better validation")
+                    return f.read()
+            else:
+                logger.warning("Enhanced template not found, using fallback")
+                with open(self.fallback_template_path, "r") as f:
+                    return f.read()
         except Exception as e:
             logger.error(
                 "Error loading template",
@@ -254,7 +266,82 @@ class PromptGenerator:
                     "error_type": type(e).__name__,
                 },
             )
-            raise
+            # Try fallback template
+            try:
+                with open(self.fallback_template_path, "r") as f:
+                    logger.info("Using fallback template due to error")
+                    return f.read()
+            except Exception as fallback_error:
+                logger.error(f"Fallback template also failed: {str(fallback_error)}")
+                raise e
+
+    def _add_validation_context(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Add validation-specific context to the configuration."""
+        try:
+            # Add subject-specific validation rules
+            subject = config.get("subject", "physics").lower()
+
+            # Add valid units for each subject
+            if subject == "physics":
+                config["valid_units"] = (
+                    "V (volts), A (amperes), Ω (ohms), W (watts), Hz (hertz), m/s, kg, N, J"
+                )
+            elif subject == "chemistry":
+                config["valid_units"] = (
+                    "M (molarity), mol/L, g, kg, L, mL, K, °C, atm, Pa"
+                )
+            else:
+                config["valid_units"] = "appropriate SI units"
+
+            # Add Three.js CDN URLs if not present
+            if "three_js_url" not in config:
+                config["three_js_url"] = "https://esm.sh/three@0.155.0"
+            if "orbit_controls_url" not in config:
+                config["orbit_controls_url"] = (
+                    "https://esm.sh/three@0.155.0/examples/jsm/controls/OrbitControls"
+                )
+
+            # Add additional imports comment
+            if "additional_imports_comment" not in config:
+                config["additional_imports_comment"] = (
+                    "// Additional imports can be added here as needed"
+                )
+
+            # Ensure TTS settings are present
+            if "tts_language" not in config:
+                config["tts_language"] = "en-US"
+            if "tts_rate" not in config:
+                config["tts_rate"] = 1.0
+            if "tts_pitch" not in config:
+                config["tts_pitch"] = 1.0
+
+            # Ensure narration texts are lists
+            if "intro_narration_texts" not in config:
+                config["intro_narration_texts"] = []
+            if "supporting_narration_texts" not in config:
+                config["supporting_narration_texts"] = []
+
+            logger.debug(
+                "Added validation context to configuration",
+                extra={
+                    "action": "add_validation_context",
+                    "subject": subject,
+                    "has_cdn_urls": "three_js_url" in config,
+                },
+            )
+
+            return config
+
+        except Exception as e:
+            logger.error(
+                "Error adding validation context",
+                extra={
+                    "action": "add_validation_context",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                },
+            )
+            return config
 
     def _load_schema(self) -> dict:
         """Load the JSON schema file."""

@@ -67,10 +67,10 @@ def remove_history_entry(db, entry_id: str):
 # Prompt operations
 def get_prompts(
     db,
-    subject: str | None = None,
-    category: str | None = None,
-    tag: str | None = None,
-    search: str | None = None,
+    subject: Optional[str] = None,
+    category: Optional[str] = None,
+    tag: Optional[str] = None,
+    search: Optional[str] = None,
 ):
     query = db.query(Prompt)
 

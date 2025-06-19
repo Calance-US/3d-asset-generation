@@ -2,6 +2,7 @@
 
 import logging
 from functools import lru_cache
+from typing import Optional
 
 import numpy as np
 from qdrant_client import QdrantClient
@@ -16,10 +17,12 @@ logger = logging.getLogger(__name__)
 class VectorStore:
     """Vector store for storing and retrieving visualizations using Qdrant and DB metadata."""
 
-    def __init__(self, dim: int, collection_name: str = None):
+    def __init__(self, dim: int, collection_name: Optional[str] = None):
         self.dim = dim
         # Use collection name from settings, fallback to argument, then default
-        self.collection_name = settings.VECTOR_STORE_COLLECTION_NAME
+        self.collection_name = (
+            collection_name or settings.VECTOR_STORE_COLLECTION_NAME or "visualizations"
+        )
         self.client = QdrantClient(host="localhost", port=6333)
         # Create collection if it doesn't exist
         collections = [c.name for c in self.client.get_collections().collections]
@@ -118,6 +121,51 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Error checking snippet hash: {str(e)}")
             return False
+
+    def similarity_search_with_score(
+        self, query_embedding: np.ndarray, k: int = 5
+    ) -> list[tuple[dict, float]]:
+        """
+        Search for similar embeddings and return results with similarity scores.
+
+        Args:
+            query_embedding: The query embedding vector
+            k: Number of results to return
+
+        Returns:
+            List of tuples containing (metadata_dict, similarity_score)
+        """
+        try:
+            logger.info(
+                f"[similarity_search_with_score] Starting search for {k} results"
+            )
+            query_vec = (
+                np.ascontiguousarray(query_embedding, dtype="float32")
+                .reshape(-1)
+                .tolist()
+            )
+            search_result = self.client.search(
+                collection_name=self.collection_name,
+                query_vector=query_vec,
+                limit=k,
+            )
+
+            # Convert to the expected format
+            results = []
+            for hit in search_result:
+                metadata = {
+                    "id": int(hit.id),
+                    "faiss_id": int(hit.id),
+                    "score": float(hit.score),
+                }
+                results.append((metadata, float(hit.score)))
+
+            logger.info(f"[similarity_search_with_score] Found {len(results)} results")
+            return results
+
+        except Exception as e:
+            logger.error(f"[similarity_search_with_score] Error: {str(e)}")
+            return []
 
     def _compute_similarity(
         self, embedding1: np.ndarray, embedding2: np.ndarray

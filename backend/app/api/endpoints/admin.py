@@ -1,14 +1,27 @@
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 from app.database.database import get_db
-from app.models import HistoryEntry, SnippetMetadata
+from app.models import (
+    AsyncTask,
+    AsyncTaskStage,
+    HistoryEntry,
+    SnippetMetadata,
+    ValidationError,
+    Visualization,
+)
+from app.services.error_fixing.validation_error_service import validation_error_service
 from app.services.rag import get_vector_store
-from fastapi import APIRouter, Depends, HTTPException
+from app.services.validation.simple_orchestrator import SimpleValidationOrchestrator
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 router = APIRouter()
+
+# Initialize validation system components for metrics
+validation_orchestrator = SimpleValidationOrchestrator()
 
 
 @router.get("/vector-store-stats", response_model=Dict[str, Any])
@@ -131,3 +144,648 @@ async def get_generation_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
             },
         )
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/validation-metrics")
+async def get_validation_metrics(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Get comprehensive validation system metrics from real database data."""
+    try:
+        # Get real validation error statistics from database
+        from sqlalchemy import text
+
+        # Basic validation metrics
+        total_errors_query = text("SELECT COUNT(*) FROM validation_errors")
+        total_errors = db.execute(total_errors_query).scalar()
+
+        # Quality score distribution
+        quality_stats_query = text("""
+            SELECT
+                AVG(quality_score::numeric) as avg_quality,
+                MIN(quality_score::numeric) as min_quality,
+                MAX(quality_score::numeric) as max_quality,
+                COUNT(DISTINCT prompt_id) as total_prompts
+            FROM validation_errors
+            WHERE quality_score IS NOT NULL
+        """)
+        quality_stats = db.execute(quality_stats_query).fetchone()
+
+        # Attempt success metrics
+        attempt_success_query = text("""
+            SELECT
+                attempt_number,
+                COUNT(*) as total_attempts,
+                COUNT(CASE WHEN severity = 'critical' THEN 1 END) as critical_errors,
+                AVG(quality_score::numeric) as avg_quality_score
+            FROM validation_errors
+            GROUP BY attempt_number
+            ORDER BY attempt_number
+        """)
+        attempt_stats = db.execute(attempt_success_query).fetchall()
+
+        # Provider performance
+        provider_stats_query = text("""
+            SELECT
+                provider,
+                COUNT(*) as total_errors,
+                AVG(quality_score::numeric) as avg_quality,
+                COUNT(DISTINCT prompt_id) as unique_prompts
+            FROM validation_errors
+            GROUP BY provider
+        """)
+        provider_stats = db.execute(provider_stats_query).fetchall()
+
+        # Phase error distribution
+        phase_stats_query = text("""
+            SELECT
+                phase,
+                COUNT(*) as error_count,
+                COUNT(CASE WHEN severity = 'critical' THEN 1 END) as critical_count
+            FROM validation_errors
+            GROUP BY phase
+            ORDER BY error_count DESC
+        """)
+        phase_stats = db.execute(phase_stats_query).fetchall()
+
+        # Recent activity (last 24 hours)
+        recent_activity_query = text("""
+            SELECT
+                COUNT(*) as recent_errors,
+                COUNT(DISTINCT prompt_id) as recent_prompts,
+                AVG(quality_score::numeric) as recent_avg_quality
+            FROM validation_errors
+            WHERE created_at > NOW() - INTERVAL '24 hours'
+        """)
+        recent_activity = db.execute(recent_activity_query).fetchone()
+
+        # Calculate improvement rates
+        improvement_data = []
+        for row in attempt_stats:
+            improvement_data.append(
+                {
+                    "attempt": row[0],
+                    "total_attempts": row[1],
+                    "critical_errors": row[2],
+                    "avg_quality_score": float(row[3]) if row[3] else 0.0,
+                }
+            )
+
+        # Calculate overall success rate
+        max_attempts = max([row[0] for row in attempt_stats]) if attempt_stats else 1
+        prompts_with_max_attempts = sum(
+            1 for row in attempt_stats if row[0] == max_attempts
+        )
+        total_unique_prompts = quality_stats[3] if quality_stats else 1
+        success_rate = (
+            (
+                (total_unique_prompts - prompts_with_max_attempts)
+                / total_unique_prompts
+                * 100
+            )
+            if total_unique_prompts > 0
+            else 0
+        )
+
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "validation_performance": {
+                "total_validation_errors": total_errors,
+                "unique_prompts_validated": quality_stats[3] if quality_stats else 0,
+                "success_rate": round(success_rate, 2),
+                "avg_attempts_per_prompt": round(total_errors / quality_stats[3], 2)
+                if quality_stats and quality_stats[3] > 0
+                else 0,
+                "attempt_breakdown": improvement_data,
+            },
+            "quality_distribution": {
+                "average_score": round(float(quality_stats[0]), 2)
+                if quality_stats and quality_stats[0]
+                else 0.0,
+                "min_score": round(float(quality_stats[1]), 2)
+                if quality_stats and quality_stats[1]
+                else 0.0,
+                "max_score": round(float(quality_stats[2]), 2)
+                if quality_stats and quality_stats[2]
+                else 0.0,
+                "score_improvement_trend": [
+                    {"attempt": row["attempt"], "avg_score": row["avg_quality_score"]}
+                    for row in improvement_data
+                ],
+            },
+            "provider_performance": [
+                {
+                    "provider": row[0],
+                    "total_errors": row[1],
+                    "avg_quality": round(float(row[2]), 2) if row[2] else 0.0,
+                    "unique_prompts": row[3],
+                }
+                for row in provider_stats
+            ],
+            "phase_error_distribution": [
+                {
+                    "phase": row[0],
+                    "total_errors": row[1],
+                    "critical_errors": row[2],
+                    "error_rate": round(row[2] / row[1] * 100, 2) if row[1] > 0 else 0,
+                }
+                for row in phase_stats
+            ],
+            "recent_activity_24h": {
+                "recent_errors": recent_activity[0] if recent_activity else 0,
+                "recent_prompts": recent_activity[1] if recent_activity else 0,
+                "recent_avg_quality": round(float(recent_activity[2]), 2)
+                if recent_activity and recent_activity[2]
+                else 0.0,
+            },
+            "system_health": {
+                "overall_success_rate": round(success_rate, 2),
+                "average_quality_score": round(float(quality_stats[0]), 2)
+                if quality_stats and quality_stats[0]
+                else 0.0,
+                "improvement_rate": round(
+                    improvement_data[-1]["avg_quality_score"]
+                    - improvement_data[0]["avg_quality_score"],
+                    2,
+                )
+                if len(improvement_data) > 1
+                else 0.0,
+                "total_validations": total_errors,
+                "active_validation_enabled": True,
+            },
+        }
+
+    except Exception as e:
+        logger = logging.getLogger("validation_metrics")
+        logger.error(f"Error getting validation metrics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get validation metrics: {str(e)}"
+        )
+
+
+@router.get("/validation-error-stats")
+async def get_validation_error_stats(
+    days: int = Query(default=30, ge=1, le=365), db: Session = Depends(get_db)
+):
+    """Get validation error statistics and retry metrics."""
+    try:
+        # Get comprehensive error statistics
+        error_stats = validation_error_service.get_error_statistics(db, days)
+
+        # Get retry success metrics
+        retry_metrics = validation_error_service.get_retry_success_metrics(db, days)
+
+        # Get most common errors
+        common_errors = validation_error_service.get_most_common_errors(
+            db, limit=10, days=days
+        )
+
+        return {
+            "period_days": days,
+            "error_statistics": error_stats,
+            "retry_metrics": retry_metrics,
+            "most_common_errors": common_errors,
+            "summary": {
+                "total_errors": error_stats.get("total_errors", 0),
+                "retry_success_rate": retry_metrics.get("retry_rate", 0),
+                "average_attempts": retry_metrics.get("average_attempts", 1.0),
+                "quality_improvement": "Available in error_statistics",
+            },
+        }
+
+    except Exception as e:
+        logger = logging.getLogger("validation_error_stats")
+        logger.error(f"Error getting validation error stats: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Failed to get validation error statistics"
+        )
+
+
+@router.get("/error-fixing-performance")
+async def get_error_fixing_performance(
+    days: int = Query(default=7, ge=1, le=90), db: Session = Depends(get_db)
+):
+    """Get detailed error fixing performance metrics."""
+    try:
+        from datetime import datetime, timedelta
+
+        from sqlalchemy import func
+
+        since_date = datetime.utcnow() - timedelta(days=days)
+
+        # Get visualization success rates with retry information
+        visualization_metrics = (
+            db.query(
+                func.count(Visualization.id).label("total_visualizations"),
+                func.avg(Visualization.generation_attempts).label("avg_attempts"),
+                func.count(Visualization.id)
+                .filter(Visualization.generation_attempts > 1)
+                .label("retry_count"),
+                func.avg(Visualization.final_quality_score).label("avg_quality_score"),
+            )
+            .filter(Visualization.created_at >= since_date)
+            .first()
+        )
+
+        # Get error distribution by phase
+        phase_distribution = (
+            db.query(
+                ValidationError.phase,
+                func.count(ValidationError.id).label("count"),
+                func.avg(ValidationError.quality_score).label("avg_quality"),
+            )
+            .filter(ValidationError.created_at >= since_date)
+            .group_by(ValidationError.phase)
+            .all()
+        )
+
+        # Get success rate by provider
+        provider_performance = (
+            db.query(
+                ValidationError.provider,
+                func.count(ValidationError.id).label("error_count"),
+                func.avg(ValidationError.quality_score).label("avg_quality"),
+            )
+            .filter(ValidationError.created_at >= since_date)
+            .group_by(ValidationError.provider)
+            .all()
+        )
+
+        return {
+            "period_days": days,
+            "overall_metrics": {
+                "total_visualizations": visualization_metrics.total_visualizations or 0,
+                "average_attempts": float(visualization_metrics.avg_attempts)
+                if visualization_metrics.avg_attempts
+                else 1.0,
+                "retry_rate": (
+                    visualization_metrics.retry_count
+                    / visualization_metrics.total_visualizations
+                    * 100
+                )
+                if visualization_metrics.total_visualizations > 0
+                else 0,
+                "average_quality_score": float(visualization_metrics.avg_quality_score)
+                if visualization_metrics.avg_quality_score
+                else 0.0,
+            },
+            "phase_distribution": [
+                {
+                    "phase": phase.phase,
+                    "error_count": phase.count,
+                    "avg_quality_score": float(phase.avg_quality)
+                    if phase.avg_quality
+                    else None,
+                }
+                for phase in phase_distribution
+            ],
+            "provider_performance": [
+                {
+                    "provider": provider.provider,
+                    "error_count": provider.error_count,
+                    "avg_quality_score": float(provider.avg_quality)
+                    if provider.avg_quality
+                    else None,
+                }
+                for provider in provider_performance
+            ],
+        }
+
+    except Exception as e:
+        logger = logging.getLogger("error_fixing_performance")
+        logger.error(f"Error getting error fixing performance: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Failed to get error fixing performance metrics"
+        )
+
+
+@router.post("/cleanup-old-errors")
+async def cleanup_old_validation_errors(
+    days: int = Query(default=90, ge=30, le=365), db: Session = Depends(get_db)
+):
+    """Clean up old validation errors to manage database size."""
+    try:
+        deleted_count = validation_error_service.cleanup_old_errors(db, days)
+
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "retention_days": days,
+            "message": f"Successfully cleaned up {deleted_count} validation errors older than {days} days",
+        }
+
+    except Exception as e:
+        logger = logging.getLogger("cleanup_errors")
+        logger.error(f"Error cleaning up old errors: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Failed to cleanup old validation errors"
+        )
+
+
+@router.get("/error-statistics")
+async def get_error_statistics(
+    days: int = Query(default=30, ge=1, le=365), db: Session = Depends(get_db)
+):
+    """Get error statistics for the specified time period."""
+    try:
+        stats = validation_error_service.get_error_statistics(db, days)
+        return stats
+    except Exception as e:
+        logger = logging.getLogger("error_statistics")
+        logger.error(f"Error getting error statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get error statistics")
+
+
+@router.get("/common-errors")
+async def get_common_errors(
+    limit: int = Query(default=10, ge=1, le=50),
+    days: int = Query(default=7, ge=1, le=90),
+    db: Session = Depends(get_db),
+):
+    """Get the most common validation errors."""
+    try:
+        errors = validation_error_service.get_most_common_errors(db, limit, days)
+        return errors
+    except Exception as e:
+        logger = logging.getLogger("common_errors")
+        logger.error(f"Error getting common errors: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get common errors")
+
+
+@router.get("/retry-metrics")
+async def get_retry_metrics(
+    days: int = Query(default=30, ge=1, le=365), db: Session = Depends(get_db)
+):
+    """Get retry success metrics."""
+    try:
+        metrics = validation_error_service.get_retry_success_metrics(db, days)
+        return metrics
+    except Exception as e:
+        logger = logging.getLogger("retry_metrics")
+        logger.error(f"Error getting retry metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get retry metrics")
+
+
+# Task Manager API Endpoints
+
+
+@router.get("/tasks", response_model=List[Dict[str, Any]])
+async def get_tasks(
+    status: Optional[str] = Query(None, description="Filter by task status"),
+    task_type: Optional[str] = Query(None, description="Filter by task type"),
+    limit: int = Query(
+        50, ge=1, le=100, description="Maximum number of tasks to return"
+    ),
+    db: Session = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """Get list of async tasks with optional filtering."""
+    logger = logging.getLogger("get_tasks")
+
+    try:
+        # Build query
+        query = db.query(AsyncTask)
+
+        # Apply filters
+        if status:
+            query = query.filter(AsyncTask.status == status)
+        if task_type:
+            query = query.filter(AsyncTask.task_type == task_type)
+
+        # Order by creation date (newest first) and limit
+        tasks = query.order_by(AsyncTask.created_at.desc()).limit(limit).all()
+
+        # Format response
+        result = []
+        for task in tasks:
+            result.append(
+                {
+                    "id": task.id,
+                    "task_type": task.task_type,
+                    "status": task.status,
+                    "progress_percentage": task.progress_percentage or 0,
+                    "current_stage": task.current_stage,
+                    "created_at": task.created_at.isoformat()
+                    if task.created_at
+                    else None,
+                    "started_at": task.started_at.isoformat()
+                    if task.started_at
+                    else None,
+                    "completed_at": task.completed_at.isoformat()
+                    if task.completed_at
+                    else None,
+                    "expires_at": task.expires_at.isoformat()
+                    if task.expires_at
+                    else None,
+                }
+            )
+
+        logger.info(f"Retrieved {len(result)} tasks")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error retrieving tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve tasks")
+
+
+@router.get("/tasks/{task_id}", response_model=Dict[str, Any])
+async def get_task_details(
+    task_id: str, db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get detailed information about a specific task."""
+    logger = logging.getLogger("get_task_details")
+
+    try:
+        # Get task
+        task = db.query(AsyncTask).filter(AsyncTask.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Get task stages
+        stages = (
+            db.query(AsyncTaskStage)
+            .filter(AsyncTaskStage.task_id == task_id)
+            .order_by(AsyncTaskStage.order_index)
+            .all()
+        )
+
+        # Format stages
+        formatted_stages = []
+        for stage in stages:
+            stage_data = {
+                "name": stage.name,
+                "status": stage.status,
+                "order_index": stage.order_index,
+                "progress_percentage": stage.progress_percentage or 0,
+                "message": stage.message,
+                "started_at": stage.started_at.isoformat()
+                if stage.started_at
+                else None,
+                "completed_at": stage.completed_at.isoformat()
+                if stage.completed_at
+                else None,
+                "error_message": stage.error_message,
+            }
+
+            # Include details if available
+            if stage.details:
+                stage_data["details"] = stage.get_details()
+
+            formatted_stages.append(stage_data)
+
+        # Format response
+        result = {
+            "id": task.id,
+            "task_type": task.task_type,
+            "status": task.status,
+            "progress_percentage": task.progress_percentage or 0,
+            "current_stage": task.current_stage,
+            "total_stages": task.total_stages or 1,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat()
+            if task.completed_at
+            else None,
+            "expires_at": task.expires_at.isoformat() if task.expires_at else None,
+            "error_message": task.error_message,
+            "stages": formatted_stages,
+        }
+
+        # Include request data if available
+        if task.request_data:
+            result["request_data"] = task.get_request_data()
+
+        # Include result if available
+        if task.result:
+            result["result"] = task.get_result()
+
+        logger.info(f"Retrieved details for task {task_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving task details for {task_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve task details")
+
+
+@router.get("/tasks/{task_id}/stages", response_model=List[Dict[str, Any]])
+async def get_task_stages(
+    task_id: str, db: Session = Depends(get_db)
+) -> List[Dict[str, Any]]:
+    """Get all stages for a specific task."""
+    logger = logging.getLogger("get_task_stages")
+
+    try:
+        # Verify task exists
+        task = db.query(AsyncTask).filter(AsyncTask.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Get stages
+        stages = (
+            db.query(AsyncTaskStage)
+            .filter(AsyncTaskStage.task_id == task_id)
+            .order_by(AsyncTaskStage.order_index)
+            .all()
+        )
+
+        # Format response
+        result = []
+        for stage in stages:
+            stage_data = {
+                "id": stage.id,
+                "name": stage.name,
+                "status": stage.status,
+                "order_index": stage.order_index,
+                "progress_percentage": stage.progress_percentage or 0,
+                "message": stage.message,
+                "started_at": stage.started_at.isoformat()
+                if stage.started_at
+                else None,
+                "completed_at": stage.completed_at.isoformat()
+                if stage.completed_at
+                else None,
+                "error_message": stage.error_message,
+            }
+
+            # Include details if available
+            if stage.details:
+                stage_data["details"] = stage.get_details()
+
+            result.append(stage_data)
+
+        logger.info(f"Retrieved {len(result)} stages for task {task_id}")
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving stages for task {task_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve task stages")
+
+
+@router.get("/tasks/stats/summary", response_model=Dict[str, Any])
+async def get_task_stats_summary(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Get summary statistics for all tasks."""
+    logger = logging.getLogger("get_task_stats")
+
+    try:
+        # Get task counts by status
+        status_counts = {}
+        for status in [
+            "pending",
+            "running",
+            "completed",
+            "failed",
+            "cancelled",
+            "timeout",
+        ]:
+            count = db.query(AsyncTask).filter(AsyncTask.status == status).count()
+            status_counts[status] = count
+
+        # Get task counts by type
+        type_counts = {}
+        types = db.query(AsyncTask.task_type).distinct().all()
+        for (task_type,) in types:
+            if task_type:
+                count = (
+                    db.query(AsyncTask).filter(AsyncTask.task_type == task_type).count()
+                )
+                type_counts[task_type] = count
+
+        # Get total tasks
+        total_tasks = db.query(AsyncTask).count()
+
+        # Get recently completed tasks (last 24 hours)
+        from datetime import datetime, timedelta
+
+        recent_completed = (
+            db.query(AsyncTask)
+            .filter(
+                AsyncTask.status == "completed",
+                AsyncTask.completed_at >= datetime.utcnow() - timedelta(hours=24),
+            )
+            .count()
+        )
+
+        # Get currently running tasks
+        running_tasks = (
+            db.query(AsyncTask).filter(AsyncTask.status == "running").count()
+        )
+
+        result = {
+            "total_tasks": total_tasks,
+            "running_tasks": running_tasks,
+            "recent_completed": recent_completed,
+            "status_distribution": status_counts,
+            "type_distribution": type_counts,
+            "last_updated": datetime.utcnow().isoformat(),
+        }
+
+        logger.info("Retrieved task statistics summary")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error retrieving task statistics: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve task statistics"
+        )

@@ -13,11 +13,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     # OpenAI Settings
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4-turbo-preview"
 
     # Google AI Settings
-    GOOGLE_API_KEY: str
+    GOOGLE_API_KEY: str = ""
 
     # Vector Store Settings
     VECTOR_STORE_DIMENSION: int = 384  # Dimension for all-MiniLM-L6-v2 model
@@ -39,6 +39,30 @@ class Settings(BaseSettings):
 
     # Similar Visualizations Limit
     SIMILAR_VIS_LIMIT: int = 10
+
+    # Validation System Configuration
+    ENABLE_COMPREHENSIVE_VALIDATION: bool = True
+    ENABLE_RUNTIME_VALIDATION: bool = False  # Expensive, enable for production
+    VALIDATION_TIMEOUT_HTML: int = 30
+    VALIDATION_TIMEOUT_SCIENTIFIC: int = 45
+    VALIDATION_TIMEOUT_REALISM: int = 30
+    VALIDATION_TIMEOUT_RUNTIME: int = 60
+
+    # Quality Scoring Configuration
+    QUALITY_SCORE_THRESHOLD: float = 7.0
+    ENABLE_QUALITY_FILTERING: bool = True
+    ENABLE_FEEDBACK_LOOP: bool = True
+
+    # Context Filtering Configuration
+    CONTEXT_FILTER_MIN_QUALITY: float = 7.0
+    CONTEXT_FILTER_MAX_ITEMS: int = 5
+    CONTEXT_FILTER_ENSURE_DIVERSITY: bool = True
+
+    # New settings in app/config/settings.py
+    MAX_LLM_RETRY: int = 3  # Maximum retry attempts
+    ENABLE_ERROR_FIXING: bool = True  # Enable/disable error fixing
+    SAVE_ALL_VALIDATION_ERRORS: bool = True  # Log all errors to database
+    ERROR_FIXING_TEMPLATE_PATH: str = "error_fixing_template.prompt.txt"
 
     # Gold Standards Analysis Prompt
     GOLD_STANDARD_ANALYSIS_PROMPT: str = """
