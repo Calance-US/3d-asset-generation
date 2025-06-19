@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
-from ...database.database import get_db
-from ...models import Visualization
-from ...schemas.visualization import VisualizationCreate, VisualizationResponse
-from ...services.prompt_selector import PromptSelector
+from app.database.database import get_db
+from app.models import Visualization
+from app.schemas.visualization import VisualizationCreate, VisualizationResponse
+from app.services.prompt_selector import PromptSelector
 from app.services.rag.embedding_service import EmbeddingService
 from app.services.rag.vector_store import get_vector_store
 from app.utils.embedding_utils import build_embedding_text_from_config
@@ -137,38 +137,6 @@ class SimilarVisualizationRequest(BaseModel):
     config: Optional[Dict[str, Any]] = None
     top_k: int = 5
 
-@router.post("/retrieve_similar", response_model=List[VisualizationResponse])
-async def retrieve_similar_visualizations(
-    request: SimilarVisualizationRequest,
-    db: Session = Depends(get_db)
-):
-    """Retrieve similar visualizations based on user prompt and/or config for context injection."""
-    # Combine prompt and config for embedding if config is provided
-    if request.config:
-        embedding_input = build_embedding_text_from_config(request.config)
-    else:
-        embedding_input = request.prompt
-    embedding = EmbeddingService.generate_embedding(embedding_input)
-    vector_store = get_vector_store()
-    # Retrieve top_k similar visualizations from the vector store
-    similar = await vector_store.get_similar_visualizations(embedding, limit=request.top_k)
-    # Optionally, fetch full visualization details from the DB using metadata (e.g., by id)
-    results = []
-    for item in similar:
-        meta = item['metadata']
-        # If you store visualization id in metadata, fetch from DB for full details
-        viz_id = meta.get('id')
-        if viz_id:
-            db_viz = db.query(Visualization).filter_by(id=viz_id).first()
-            if db_viz:
-                results.append(db_viz)
-            else:
-                # Fallback: return metadata as VisualizationResponse
-                results.append(VisualizationResponse(**meta))
-        else:
-            # Fallback: return metadata as VisualizationResponse
-            results.append(VisualizationResponse(**meta))
-    return results
 
 @router.post("/generate", response_model=HTMLResponse)
 async def generate_visualization(request: GenerateRequest, db: Session = Depends(get_db)) -> HTMLResponse:
@@ -189,9 +157,20 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
             embedding_input = request.topic
         embedding = EmbeddingService.generate_embedding(embedding_input)
         similar = await vector_store.get_similar_visualizations(embedding, db, limit=settings.SIMILAR_VIS_LIMIT)
+        
+        # Filter to limit 1 example per snippet_type
+        seen_snippet_types = set()
+        filtered_similar = []
+        for item in similar:
+            meta = item['metadata']
+            snippet_type = meta.get('snippet_type', 'miscellaneous')
+            if snippet_type not in seen_snippet_types:
+                seen_snippet_types.add(snippet_type)
+                filtered_similar.append(item)
+        
         # Build improved context string from similar visualizations
         context_blocks = []
-        for idx, item in enumerate(similar, 1):
+        for idx, item in enumerate(filtered_similar, 1):
             meta = item['metadata']
             meta = serialize_datetimes(meta)
             viz_id = meta.get('id')
@@ -227,7 +206,7 @@ async def generate_visualization(request: GenerateRequest, db: Session = Depends
                     "similarity": item.get('similarity'),
                     "summary": item['metadata'].get('scene_description', '')
                 }
-                for item in similar
+                for item in filtered_similar
             ]
         })
         # Generate the prompt using either custom config or basic topic info

@@ -7,6 +7,7 @@ from app.services.rag.embedding_service import EmbeddingService
 from app.services.rag.vector_store import get_vector_store
 from app.schemas.schemas import GenerateRequest, RetrieveSimilarResponse
 from app.utils.embedding_utils import build_embedding_text_from_config
+from app.config.settings import settings
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ async def get_diverse_examples(
 async def retrieve_similar_visualizations(
     request: GenerateRequest,
     db: Session = Depends(get_db),
-    top_k: int = Query(5, description="Number of similar results to return")
+    top_k: int = Query(settings.SIMILAR_VIS_LIMIT, description="Number of similar results to return")
 ) -> RetrieveSimilarResponse:
     """Retrieve similar visualizations/snippets based on user prompt and config."""
     try:
@@ -52,7 +53,7 @@ async def retrieve_similar_visualizations(
         results = []
         for item in similar:
             meta = item.get('metadata', {})
-            score = item.get('score') if 'score' in item else None
+            score = item.get('similarity') if 'similarity' in item else None
             results.append({
                 'metadata': meta,
                 'score': score
