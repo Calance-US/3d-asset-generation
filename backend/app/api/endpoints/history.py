@@ -2,12 +2,14 @@ import datetime
 import json
 import logging
 
+from app.auth.dependencies import get_current_user_optional
 from app.database.database import (
     get_all_history,
     get_db,
     get_history_entry_by_id,
     remove_history_entry,
 )
+from app.models import User
 from app.schemas.schemas import HistoryEntryResponse, HistoryResponse, SuccessResponse
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -17,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_model=HistoryResponse)
-async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
+async def get_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
+) -> HistoryResponse:
     """Get the history of generated visualizations."""
     try:
         history = get_all_history(db)
@@ -26,7 +31,7 @@ async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
                 HistoryEntryResponse(
                     id=entry.id,
                     prompt=entry.user_query or "",
-                    provider=entry.provider or "Unknown",
+                    provider=entry.ai_provider.name if entry.ai_provider else "Unknown",
                     subject=entry.prompt.subject if entry.prompt else "Unknown",
                     html=entry.response or "",
                     timestamp=entry.created_at.isoformat()
@@ -90,7 +95,9 @@ async def get_history(db: Session = Depends(get_db)) -> HistoryResponse:
 
 @router.get("/{entry_id}", response_model=HistoryEntryResponse)
 async def get_history_entry(
-    entry_id: str, db: Session = Depends(get_db)
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
 ) -> HistoryEntryResponse:
     """Get a specific history entry by ID."""
     try:
@@ -100,7 +107,7 @@ async def get_history_entry(
         return HistoryEntryResponse(
             id=entry.id,
             prompt=entry.user_query or "",
-            provider=entry.provider or "Unknown",
+            provider=entry.ai_provider.name if entry.ai_provider else "Unknown",
             subject=entry.prompt.subject if entry.prompt else "Unknown",
             html=entry.response or "",
             timestamp=entry.created_at.isoformat()
@@ -166,7 +173,9 @@ async def get_history_entry(
 
 @router.delete("/{entry_id}", response_model=SuccessResponse)
 async def delete_history_entry(
-    entry_id: str, db: Session = Depends(get_db)
+    entry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
 ) -> SuccessResponse:
     """Delete a history entry."""
     try:

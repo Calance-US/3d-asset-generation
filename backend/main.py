@@ -1,5 +1,6 @@
 import uvicorn
 from app.api.api import api_router
+from app.auth.keycloak_client import get_keycloak_client
 from app.config.logging_config import logger
 from app.config.settings import get_settings
 from app.database.database import get_db, get_prompts
@@ -57,6 +58,11 @@ async def health_check():
         "enable_error_fixing": settings.ENABLE_ERROR_FIXING,
         "save_all_validation_errors": settings.SAVE_ALL_VALIDATION_ERRORS,
         "error_fixing_template_path": settings.ERROR_FIXING_TEMPLATE_PATH,
+        "auth_enabled": settings.AUTH_ENABLED,
+        "auth_bypass_development": settings.AUTH_BYPASS_DEVELOPMENT,
+        "keycloak_server_url": settings.KEYCLOAK_SERVER_URL,
+        "keycloak_realm": settings.KEYCLOAK_REALM,
+        "keycloak_client_id": settings.KEYCLOAK_CLIENT_ID,
     }
 
     # Only include database URL in development environment
@@ -69,12 +75,52 @@ async def health_check():
 @app.on_event("startup")
 async def startup_event():
     try:
+        # Test database connection
         db = next(get_db())
         prompts = get_prompts(db)
         logger.info(
             "Database connection successful",
             extra={"action": "init_database", "prompt_count": len(prompts)},
         )
+
+        # Test authentication service connection if enabled
+        settings = get_settings()
+        if settings.AUTH_ENABLED:
+            try:
+                keycloak_client = get_keycloak_client()
+                auth_healthy = keycloak_client.health_check()
+                if auth_healthy:
+                    logger.info(
+                        "Authentication service connection successful",
+                        extra={
+                            "action": "init_auth",
+                            "keycloak_server": settings.KEYCLOAK_SERVER_URL,
+                        },
+                    )
+                else:
+                    logger.warning(
+                        "Authentication service connection failed",
+                        extra={
+                            "action": "init_auth",
+                            "keycloak_server": settings.KEYCLOAK_SERVER_URL,
+                        },
+                    )
+            except Exception as auth_error:
+                logger.warning(
+                    "Authentication service initialization failed",
+                    extra={
+                        "action": "init_auth",
+                        "error": str(auth_error),
+                        "error_type": type(auth_error).__name__,
+                        "keycloak_server": settings.KEYCLOAK_SERVER_URL,
+                    },
+                )
+        else:
+            logger.info(
+                "Authentication is disabled",
+                extra={"action": "init_auth", "auth_enabled": False},
+            )
+
     except Exception as e:
         logger.error(
             "Error during startup",

@@ -3,12 +3,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+from app.auth.dependencies import get_admin_user
 from app.database.database import get_db
 from app.models import (
     AsyncTask,
     AsyncTaskStage,
     HistoryEntry,
     SnippetMetadata,
+    User,
     ValidationError,
     Visualization,
 )
@@ -25,7 +27,9 @@ validation_orchestrator = SimpleValidationOrchestrator()
 
 
 @router.get("/vector-store-stats", response_model=Dict[str, Any])
-async def get_vector_store_stats() -> Dict[str, Any]:
+async def get_vector_store_stats(
+    admin_user: User = Depends(get_admin_user),
+) -> Dict[str, Any]:
     """Get statistics about the vector store (Qdrant or other)."""
     vector_store = get_vector_store()
     db = next(get_db())
@@ -80,6 +84,7 @@ async def get_vector_store_vectors(
     snippet_type: Optional[str] = None,
     topic: Optional[str] = None,
     education_level: Optional[str] = None,
+    admin_user: User = Depends(get_admin_user),
 ) -> List[Dict[str, Any]]:
     """Get paginated vectors from the vector store with optional filtering."""
     vector_store = get_vector_store()
@@ -113,7 +118,10 @@ async def get_vector_store_vectors(
 
 
 @router.get("/admin/generation-stats", response_model=Dict[str, Any])
-async def get_generation_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def get_generation_stats(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user),
+) -> Dict[str, Any]:
     """Get statistics about visualization generation times."""
     try:
         # Get all generation times
@@ -147,7 +155,10 @@ async def get_generation_stats(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
 
 @router.get("/validation-metrics")
-async def get_validation_metrics(db: Session = Depends(get_db)) -> Dict[str, Any]:
+async def get_validation_metrics(
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user),
+) -> Dict[str, Any]:
     """Get comprehensive validation system metrics from real database data."""
     try:
         # Get real validation error statistics from database
@@ -323,7 +334,9 @@ async def get_validation_metrics(db: Session = Depends(get_db)) -> Dict[str, Any
 
 @router.get("/validation-error-stats")
 async def get_validation_error_stats(
-    days: int = Query(default=30, ge=1, le=365), db: Session = Depends(get_db)
+    days: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(get_admin_user),
 ):
     """Get validation error statistics and retry metrics."""
     try:

@@ -64,6 +64,22 @@ class Settings(BaseSettings):
     SAVE_ALL_VALIDATION_ERRORS: bool = True  # Log all errors to database
     ERROR_FIXING_TEMPLATE_PATH: str = "error_fixing_template.prompt.txt"
 
+    # Keycloak Configuration
+    KEYCLOAK_SERVER_URL: str = "http://localhost:28080"
+    KEYCLOAK_REALM: str = "local-apps"
+    KEYCLOAK_CLIENT_ID: str = "3d-visualization-app"
+    KEYCLOAK_CLIENT_SECRET: str = ""
+    KEYCLOAK_ADMIN_USERNAME: str = "admin"
+    KEYCLOAK_ADMIN_PASSWORD: str = "admin123"
+
+    # JWT Configuration
+    JWT_ALGORITHM: str = "RS256"
+    JWT_AUDIENCE: str = "account"
+
+    # Authentication Configuration
+    AUTH_ENABLED: bool = True
+    AUTH_BYPASS_DEVELOPMENT: bool = True  # Allow bypassing auth in dev mode
+
     # Gold Standards Analysis Prompt
     GOLD_STANDARD_ANALYSIS_PROMPT: str = """
     Given the following HTML visualization, analyze it and generate a configuration that matches this JSON schema:

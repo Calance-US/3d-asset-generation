@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 import sqlalchemy as sa
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -37,6 +38,102 @@ visualization_tags = Table(
 )
 
 
+class AIProvider(Base):
+    """SQLAlchemy model for AI provider configurations."""
+
+    __tablename__ = "ai_providers"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String, nullable=False)  # openai/google/anthropic
+    description = Column(String, nullable=True)
+    config = Column(JSON, nullable=True)  # API settings
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    history_entries = relationship("HistoryEntry", back_populates="ai_provider")
+    validation_errors = relationship("ValidationError", back_populates="ai_provider")
+
+    def __repr__(self):
+        return f"<AIProvider(id={self.id}, name='{self.name}', is_active={self.is_active})>"
+
+
+class TagCategory(Base):
+    """SQLAlchemy model for hierarchical tag categories."""
+
+    __tablename__ = "tag_categories"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    name = Column(String, nullable=False)  # Subject/Grade/Difficulty
+    description = Column(String, nullable=True)
+    parent_category_id = Column(Integer, ForeignKey("tag_categories.id"), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Self-referential relationship for hierarchy
+    parent = relationship("TagCategory", remote_side=[id], back_populates="children")
+    children = relationship("TagCategory", back_populates="parent")
+
+    # Relationship with tags
+    tags = relationship("Tag", back_populates="category")
+
+    def __repr__(self):
+        return f"<TagCategory(id={self.id}, name='{self.name}', parent_id={self.parent_category_id})>"
+
+
+class User(Base):
+    """SQLAlchemy model for users with Keycloak SSO integration."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    external_id = Column(
+        String, unique=True, index=True, nullable=False
+    )  # Keycloak UUID
+    provider = Column(
+        String, nullable=False, default="keycloak"
+    )  # keycloak/google/github
+    username = Column(String, nullable=False)
+    email = Column(String, nullable=True)
+    role = Column(String, nullable=False, default="student")  # cached from Keycloak
+    last_login = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    is_deleted = Column(Boolean, nullable=False, default=False)
+
+    # Relationships
+    prompts = relationship("Prompt", back_populates="user")
+    visualizations = relationship("Visualization", back_populates="user")
+    history_entries = relationship("HistoryEntry", back_populates="user")
+    shared_content_owned = relationship(
+        "SharedContent",
+        foreign_keys="SharedContent.owner_user_id",
+        back_populates="owner",
+    )
+    shared_content_received = relationship(
+        "SharedContent",
+        foreign_keys="SharedContent.target_user_id",
+        back_populates="target",
+    )
+    async_tasks = relationship("AsyncTask", back_populates="user")
+
+    def is_admin_user(self) -> bool:
+        """Check if user has admin role."""
+        return self.role in ["admin", "super_admin"]
+
+    def is_active_user(self) -> bool:
+        """Check if user is active (not deleted)."""
+        return not self.is_deleted
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}', role='{self.role}')>"
+
+
 class Prompt(Base):
     __tablename__ = "prompts"
 
@@ -50,10 +147,12 @@ class Prompt(Base):
     education_level = Column(String(50), nullable=True)
     learning_objectives = Column(Text, nullable=True)
     interactive_features = Column(Text, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    user = relationship("User", back_populates="prompts")
     tags = relationship("Tag", secondary=prompt_tags, back_populates="prompts")
     validation_errors = relationship("ValidationError", back_populates="prompt")
 
@@ -62,8 +161,14 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("tag_categories.id"), nullable=True)
     name = Column(String, unique=True, index=True)
+    description = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    is_deleted = Column(Boolean, default=False)
+
+    # Relationships
+    category = relationship("TagCategory", back_populates="tags")
     prompts = relationship("Prompt", secondary=prompt_tags, back_populates="tags")
     visualizations = relationship(
         "Visualization", secondary=visualization_tags, back_populates="tags"
@@ -75,22 +180,28 @@ class HistoryEntry(Base):
 
     id = Column(String, primary_key=True, index=True)
     prompt_id = Column(Integer, ForeignKey("prompts.id"))
+    visualization_id = Column(Integer, ForeignKey("visualizations.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     user_query = Column(Text)
     response = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    provider = Column(String(50), nullable=True)
+    provider_id = Column(Integer, ForeignKey("ai_providers.id"), nullable=True)
+    scene_description = Column(Text, nullable=True)
     components = Column(JSON, nullable=True, default=list)
     materials = Column(JSON, nullable=True, default=list)
     lights = Column(JSON, nullable=True, default=list)
     render_settings = Column(JSON, nullable=True, default=dict)
-    animation_speed = Column(Float, nullable=True)
     intro_narration_texts = Column(JSON, nullable=True, default=list)
     supporting_narration_texts = Column(JSON, nullable=True, default=list)
-    scene_description = Column(String)
-    generation_time = Column(Float)
+    animation_speed = Column(Float, nullable=True)
+    generation_time = Column(Float, nullable=True)
+    visibility = Column(String, nullable=False, default="private")  # private/public
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
     prompt = relationship("Prompt")
+    visualization = relationship("Visualization")
+    user = relationship("User", back_populates="history_entries")
+    ai_provider = relationship("AIProvider", back_populates="history_entries")
 
 
 class Visualization(Base):
@@ -102,6 +213,7 @@ class Visualization(Base):
     html_content = Column(Text)
     config = Column(JSON)
     embedding = Column(JSON)  # Store embeddings as JSON for similarity search
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -111,10 +223,37 @@ class Visualization(Base):
     validation_errors_count = Column(Integer, default=0)
 
     # Relationships
+    user = relationship("User", back_populates="visualizations")
     tags = relationship(
         "Tag", secondary=visualization_tags, back_populates="visualizations"
     )
     validation_errors = relationship("ValidationError", back_populates="visualization")
+
+
+class SharedContent(Base):
+    """SQLAlchemy model for content sharing between users."""
+
+    __tablename__ = "shared_content"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    target_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content_type = Column(String, nullable=False)  # prompt/visualization
+    content_id = Column(Integer, nullable=False)
+    permission_level = Column(String, nullable=False, default="view")  # view/edit
+    shared_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    owner = relationship(
+        "User", foreign_keys=[owner_user_id], back_populates="shared_content_owned"
+    )
+    target = relationship(
+        "User", foreign_keys=[target_user_id], back_populates="shared_content_received"
+    )
+
+    def __repr__(self):
+        return f"<SharedContent(id={self.id}, content_type='{self.content_type}', content_id={self.content_id})>"
 
 
 class GoldStandardUploadStatus(Base):
@@ -144,21 +283,24 @@ class ValidationError(Base):
     id = Column(Integer, primary_key=True, index=True)
     visualization_id = Column(Integer, ForeignKey("visualizations.id"), nullable=True)
     prompt_id = Column(Integer, ForeignKey("prompts.id"), nullable=True)
+    # snippet_id = Column(Integer, ForeignKey("snippet_metadata.id"), nullable=True)  # Temporarily disabled - DB column doesn't exist
     phase = Column(String(50), nullable=False, index=True)
     severity = Column(String(20), nullable=False, index=True)
     error_type = Column(String(100), nullable=False, index=True)
     message = Column(Text, nullable=False)
-    location = Column(Text, nullable=True)
-    suggestion = Column(Text, nullable=True)
+    location = Column(String(200), nullable=True)
     context = Column(Text, nullable=True)
-    attempt_number = Column(Integer, nullable=False, default=1)
+    suggestion = Column(Text, nullable=True)
     quality_score = Column(Numeric(3, 1), nullable=True)
-    provider = Column(String(20), nullable=True)
+    attempt_number = Column(Integer, nullable=False, default=1)
+    provider_id = Column(Integer, ForeignKey("ai_providers.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     # Relationships
     visualization = relationship("Visualization", back_populates="validation_errors")
     prompt = relationship("Prompt", back_populates="validation_errors")
+    # snippet = relationship("SnippetMetadata", back_populates="validation_error_records")  # Temporarily disabled - DB column doesn't exist
+    ai_provider = relationship("AIProvider", back_populates="validation_errors")
 
 
 class SnippetMetadata(Base):
@@ -185,6 +327,9 @@ class SnippetMetadata(Base):
     education_level = Column(String)
     learning_objectives = Column(String)
     faiss_id = Column(sa.BigInteger, unique=True, nullable=True)
+
+    # Relationships
+    # validation_error_records = relationship("ValidationError", back_populates="snippet")  # Temporarily disabled - DB column doesn't exist
 
 
 class AsyncTask(Base):
@@ -214,11 +359,15 @@ class AsyncTask(Base):
     current_stage = Column(String(50), nullable=True)  # Current stage name
     total_stages = Column(Integer, default=1)  # Total number of stages
     expires_at = Column(DateTime, nullable=True)  # When task should be cleaned up
+    user_id = Column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )  # User who created the task
 
     # Relationships
     stages = relationship(
         "AsyncTaskStage", back_populates="task", cascade="all, delete-orphan"
     )
+    user = relationship("User", back_populates="async_tasks")
 
     def set_request_data(self, data: Dict[str, Any]):
         """Set the request_data field, converting dict to JSON."""

@@ -361,3 +361,111 @@ class GoldStandardResponse(BaseModel):
 class HtmlAnalysisRequest(BaseModel):
     html: str
     provider: str = "openai"  # Default to OpenAI
+
+
+# Authentication Schemas
+class UserCreate(BaseModel):
+    """Schema for creating a new user."""
+
+    external_id: str = Field(..., description="Keycloak UUID")
+    provider: str = Field(default="keycloak", description="Authentication provider")
+    username: str = Field(..., min_length=1, max_length=255)
+    email: Optional[str] = Field(None, max_length=255)
+    role: str = Field(default="student", description="User role cached from Keycloak")
+
+
+class UserUpdate(BaseModel):
+    """Schema for updating user information."""
+
+    username: Optional[str] = Field(None, min_length=1, max_length=255)
+    email: Optional[str] = Field(None, max_length=255)
+    role: Optional[str] = Field(None, description="User role")
+    is_deleted: Optional[bool] = None
+
+
+class UserResponse(BaseModel):
+    """Schema for user response data."""
+
+    id: int
+    external_id: str
+    provider: str
+    username: str
+    email: Optional[str]
+    role: str
+    last_login: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    is_deleted: bool
+    is_active: bool
+    is_admin: bool
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_user(cls, user):
+        """Create UserResponse from User model with computed properties."""
+        return cls(
+            id=user.id,
+            external_id=user.external_id,
+            provider=user.provider,
+            username=user.username,
+            email=user.email,
+            role=user.role,
+            last_login=user.last_login,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            is_deleted=user.is_deleted,
+            is_active=user.is_active_user(),
+            is_admin=user.is_admin_user(),
+        )
+
+
+class TokenInfo(BaseModel):
+    """Schema for JWT token information."""
+
+    valid: bool
+    expired: bool
+    remaining_time: Optional[int] = None
+    user_info: Optional[Dict[str, Any]] = None
+    claims_valid: bool = False
+    error: Optional[str] = None
+
+
+class AuthConfig(BaseModel):
+    """Schema for authentication configuration."""
+
+    auth_enabled: bool
+    auth_provider: Optional[str] = None
+    server_url: Optional[str] = None
+    realm: Optional[str] = None
+    client_id: Optional[str] = None
+    authorization_endpoint: Optional[str] = None
+    token_endpoint: Optional[str] = None
+    userinfo_endpoint: Optional[str] = None
+    end_session_endpoint: Optional[str] = None
+    jwks_uri: Optional[str] = None
+
+
+class AuthHealthResponse(BaseModel):
+    """Schema for authentication health check response."""
+
+    status: str
+    keycloak_server: Optional[str] = None
+    realm: Optional[str] = None
+    message: str
+
+
+class UserProfile(BaseModel):
+    """Schema for user profile information."""
+
+    authenticated: bool
+    user: Optional[Dict[str, Any]] = None
+    auth_enabled: bool
+
+
+class LogoutResponse(BaseModel):
+    """Schema for logout response."""
+
+    message: str
+    logout_url: Optional[str] = None

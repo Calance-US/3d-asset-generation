@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast } from 'react-toastify';
 import VectorStoreDashboard from './admin/VectorStoreDashboard';
 import ValidationMetrics from './admin/ValidationMetrics';
@@ -7,8 +7,13 @@ import { Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, Tabl
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { BASE_URL } from '../lib/utils';
+import { adminAPI, get } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
+import UserMenu from './auth/UserMenu';
 
 function Admin() {
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,6 +54,14 @@ function Admin() {
     tags: []
   });
 
+  // Redirect non-admin users
+  useEffect(() => {
+    if (!isAdmin()) {
+      navigate('/');
+      toast.error('Admin access required');
+    }
+  }, [isAdmin, navigate]);
+
   // Task Manager state
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -57,7 +70,6 @@ function Admin() {
   const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
   const [taskDetailsLoading, setTaskDetailsLoading] = useState(false);
   const [taskPollingInterval, setTaskPollingInterval] = useState(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadPrompts();
@@ -320,20 +332,33 @@ function Admin() {
 
   return (
     <div className="min-h-screen bg-gray-900 p-6">
-      {/* Home Button */}
-      <div className="mb-4 flex justify-between items-center">
-        <Button
-          variant="outlined"
-          color="primary"
-          onClick={() => navigate('/')}
-          sx={{ color: '#3B82F6', borderColor: '#3B82F6', '&:hover': { backgroundColor: 'rgba(59, 130, 246, 0.1)' } }}
-        >
-          Home
-        </Button>
-        {/* You can add other header content here if needed */}
+      {/* Header */}
+      <div className="mb-6 flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          <Link
+            to="/"
+            className="inline-flex items-center px-4 py-2 border border-blue-600 text-sm font-medium rounded-md text-blue-400 hover:bg-blue-600 hover:text-white transition-colors"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Generator
+          </Link>
+          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+        </div>
+        <div className="flex items-center space-x-4">
+          {user && (
+            <div className="text-sm text-gray-300">
+              <span>Logged in as:</span>
+              <span className="ml-2 font-medium text-white">{user.firstName || user.username}</span>
+              <span className="ml-2 px-2 py-1 bg-red-600 text-xs rounded-full">Admin</span>
+            </div>
+          )}
+          <UserMenu />
+        </div>
       </div>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+
 
         <Tabs
           value={activeTab}

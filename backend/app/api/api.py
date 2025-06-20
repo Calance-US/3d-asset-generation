@@ -1,6 +1,7 @@
 from app.api.endpoints import (
     admin,
     async_visualizations,
+    auth,
     gold_standards,
     history,
     models,
@@ -29,3 +30,4 @@ api_router.include_router(
     prefix="/async-visualizations",
     tags=["async-visualizations"],
 )
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])

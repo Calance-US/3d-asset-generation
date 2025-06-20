@@ -5,9 +5,10 @@ import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.config.settings import settings
 from app.database.database import create_history_entry, create_prompt, get_db
-from app.models import Visualization
+from app.models import User, Visualization
 from app.schemas.schemas import GenerateRequest, HTMLResponse
 from app.schemas.visualization import VisualizationCreate, VisualizationResponse
 from app.services.error_fixing.error_fixing_service import error_fixing_service
@@ -46,7 +47,9 @@ validation_orchestrator = SimpleValidationOrchestrator()
 
 @router.post("/save", response_model=VisualizationResponse)
 async def save_visualization(
-    visualization: VisualizationCreate, db: Session = Depends(get_db)
+    visualization: VisualizationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> VisualizationResponse:
     """Save a visualization to the library."""
     try:
@@ -61,6 +64,7 @@ async def save_visualization(
             html_content=visualization.html_content,
             config=visualization.config,
             embedding=embedding,
+            user_id=current_user.id,
             created_at=datetime.datetime.now(),
             updated_at=datetime.datetime.now(),
         )
@@ -93,7 +97,10 @@ async def save_visualization(
 
 @router.get("/", response_model=List[VisualizationResponse])
 async def get_visualizations(
-    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
 ) -> List[VisualizationResponse]:
     """Get all visualizations."""
     try:
@@ -124,7 +131,9 @@ async def get_visualizations(
 
 @router.get("/{visualization_id}", response_model=VisualizationResponse)
 async def get_visualization(
-    visualization_id: int, db: Session = Depends(get_db)
+    visualization_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_optional),
 ) -> VisualizationResponse:
     """Get a specific visualization by ID."""
     try:
@@ -163,7 +172,9 @@ class SimilarVisualizationRequest(BaseModel):
 
 @router.post("/generate", response_model=HTMLResponse)
 async def generate_visualization(
-    request: GenerateRequest, db: Session = Depends(get_db)
+    request: GenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> HTMLResponse:
     """Generate a 3D visualization based on the topic."""
     try:

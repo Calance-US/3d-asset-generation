@@ -13,9 +13,10 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from app.auth.dependencies import get_current_user
 from app.config.settings import settings
 from app.database.database import create_history_entry, create_prompt, get_db
-from app.models import AsyncTask, AsyncTaskStage
+from app.models import AsyncTask, AsyncTaskStage, User
 from app.schemas.schemas import GenerateRequest
 from app.services.error_fixing.enhanced_error_fixing_service import (
     enhanced_error_fixing_service,
@@ -72,6 +73,7 @@ def create_async_task(
     db: Session,
     task_type: str,
     request_data: Dict[str, Any],
+    user_id: int,
     timeout_minutes: int = 15,
     max_retries: int = 3,
     metadata: Optional[Dict[str, Any]] = None,
@@ -85,11 +87,14 @@ def create_async_task(
         status="pending",
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        request_data=request_data,
         progress_percentage=0,
         total_stages=len(VISUALIZATION_STAGES),
         expires_at=datetime.utcnow() + timedelta(minutes=timeout_minutes),
+        user_id=user_id,
     )
+
+    # Set request data using the model method
+    task.set_request_data(request_data)
 
     db.add(task)
 
@@ -260,6 +265,7 @@ async def generate_visualization_async(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, str]:
     """
     Start async visualization generation and return task ID immediately.
@@ -275,6 +281,7 @@ async def generate_visualization_async(
             request_data=request.model_dump(),
             timeout_minutes=15,
             max_retries=settings.MAX_LLM_RETRY,
+            user_id=current_user.id,
             metadata={
                 "provider": request.provider,
                 "topic": request.topic,

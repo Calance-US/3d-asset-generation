@@ -1,0 +1,3064 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FastAPI",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/visualizations/save": {
+      "post": {
+        "tags": [
+          "visualizations"
+        ],
+        "summary": "Save Visualization",
+        "description": "Save a visualization to the library.",
+        "operationId": "save_visualization_api_v1_visualizations_save_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisualizationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisualizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/visualizations/": {
+      "get": {
+        "tags": [
+          "visualizations"
+        ],
+        "summary": "Get Visualizations",
+        "description": "Get all visualizations.",
+        "operationId": "get_visualizations_api_v1_visualizations__get",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VisualizationResponse"
+                  },
+                  "title": "Response Get Visualizations Api V1 Visualizations  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/visualizations/{visualization_id}": {
+      "get": {
+        "tags": [
+          "visualizations"
+        ],
+        "summary": "Get Visualization",
+        "description": "Get a specific visualization by ID.",
+        "operationId": "get_visualization_api_v1_visualizations__visualization_id__get",
+        "parameters": [
+          {
+            "name": "visualization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Visualization Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisualizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/visualizations/generate": {
+      "post": {
+        "tags": [
+          "visualizations"
+        ],
+        "summary": "Generate Visualization",
+        "description": "Generate a 3D visualization based on the topic.",
+        "operationId": "generate_visualization_api_v1_visualizations_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTMLResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/visualizations/validate-batch": {
+      "post": {
+        "tags": [
+          "visualizations"
+        ],
+        "summary": "Validate Batch Content",
+        "description": "Validate multiple 3D visualizations in batch.",
+        "operationId": "validate_batch_content_api_v1_visualizations_validate_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "Batch Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Validate Batch Content Api V1 Visualizations Validate Batch Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gold-standards/": {
+      "get": {
+        "tags": [
+          "gold-standards"
+        ],
+        "summary": "List Gold Standards",
+        "description": "List all gold standard visualizations.",
+        "operationId": "list_gold_standards_api_v1_gold_standards__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GoldStandardResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Gold Standards Api V1 Gold Standards  Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "gold-standards"
+        ],
+        "summary": "Create Gold Standards",
+        "description": "Create gold standards from HTML files.",
+        "operationId": "create_gold_standards_api_v1_gold_standards__post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_gold_standards_api_v1_gold_standards__post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Gold Standards Api V1 Gold Standards  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gold-standards/status/{upload_id}": {
+      "get": {
+        "tags": [
+          "gold-standards"
+        ],
+        "summary": "Get Gold Standard Upload Status",
+        "operationId": "get_gold_standard_upload_status_api_v1_gold_standards_status__upload_id__get",
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gold-standards/search": {
+      "get": {
+        "tags": [
+          "gold-standards"
+        ],
+        "summary": "Search Gold Standards",
+        "description": "Search for similar gold standard visualizations.",
+        "operationId": "search_gold_standards_api_v1_gold_standards_search_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Query"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 2,
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GoldStandardResponse"
+                  },
+                  "title": "Response Search Gold Standards Api V1 Gold Standards Search Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gold-standards/{index}": {
+      "put": {
+        "tags": [
+          "gold-standards"
+        ],
+        "summary": "Update Gold Standard",
+        "description": "Update a gold standard visualization in the vector store.",
+        "operationId": "update_gold_standard_api_v1_gold_standards__index__put",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoldStandardUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoldStandardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "gold-standards"
+        ],
+        "summary": "Delete Gold Standard",
+        "description": "Delete a gold standard visualization from the vector store.",
+        "operationId": "delete_gold_standard_api_v1_gold_standards__index__delete",
+        "parameters": [
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/vector-store-stats": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Vector Store Stats",
+        "description": "Get statistics about the vector store (Qdrant or other).",
+        "operationId": "get_vector_store_stats_api_v1_admin_vector_store_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Vector Store Stats Api V1 Admin Vector Store Stats Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/vector-store-vectors": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Vector Store Vectors",
+        "description": "Get paginated vectors from the vector store with optional filtering.",
+        "operationId": "get_vector_store_vectors_api_v1_admin_vector_store_vectors_get",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "snippet_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Snippet Type"
+            }
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Topic"
+            }
+          },
+          {
+            "name": "education_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Education Level"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  },
+                  "title": "Response Get Vector Store Vectors Api V1 Admin Vector Store Vectors Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/admin/generation-stats": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Generation Stats",
+        "description": "Get statistics about visualization generation times.",
+        "operationId": "get_generation_stats_api_v1_admin_admin_generation_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Generation Stats Api V1 Admin Admin Generation Stats Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/validation-metrics": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Validation Metrics",
+        "description": "Get comprehensive validation system metrics from real database data.",
+        "operationId": "get_validation_metrics_api_v1_admin_validation_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Validation Metrics Api V1 Admin Validation Metrics Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/validation-error-stats": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Validation Error Stats",
+        "description": "Get validation error statistics and retry metrics.",
+        "operationId": "get_validation_error_stats_api_v1_admin_validation_error_stats_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/error-fixing-performance": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Error Fixing Performance",
+        "description": "Get detailed error fixing performance metrics.",
+        "operationId": "get_error_fixing_performance_api_v1_admin_error_fixing_performance_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/cleanup-old-errors": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Cleanup Old Validation Errors",
+        "description": "Clean up old validation errors to manage database size.",
+        "operationId": "cleanup_old_validation_errors_api_v1_admin_cleanup_old_errors_post",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 30,
+              "default": 90,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/error-statistics": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Error Statistics",
+        "description": "Get error statistics for the specified time period.",
+        "operationId": "get_error_statistics_api_v1_admin_error_statistics_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/common-errors": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Common Errors",
+        "description": "Get the most common validation errors.",
+        "operationId": "get_common_errors_api_v1_admin_common_errors_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/retry-metrics": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Retry Metrics",
+        "description": "Get retry success metrics.",
+        "operationId": "get_retry_metrics_api_v1_admin_retry_metrics_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tasks": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Tasks",
+        "description": "Get list of async tasks with optional filtering.",
+        "operationId": "get_tasks_api_v1_admin_tasks_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by task status",
+              "title": "Status"
+            },
+            "description": "Filter by task status"
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by task type",
+              "title": "Task Type"
+            },
+            "description": "Filter by task type"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Maximum number of tasks to return",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Maximum number of tasks to return"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  },
+                  "title": "Response Get Tasks Api V1 Admin Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Task Details",
+        "description": "Get detailed information about a specific task.",
+        "operationId": "get_task_details_api_v1_admin_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Task Details Api V1 Admin Tasks  Task Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tasks/{task_id}/stages": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Task Stages",
+        "description": "Get all stages for a specific task.",
+        "operationId": "get_task_stages_api_v1_admin_tasks__task_id__stages_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  },
+                  "title": "Response Get Task Stages Api V1 Admin Tasks  Task Id  Stages Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tasks/stats/summary": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Task Stats Summary",
+        "description": "Get summary statistics for all tasks.",
+        "operationId": "get_task_stats_summary_api_v1_admin_tasks_stats_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Task Stats Summary Api V1 Admin Tasks Stats Summary Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/enhance-prompt": {
+      "post": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Enhance Prompt",
+        "operationId": "enhance_prompt_api_v1_prompt_enhance_prompt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnhancementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/": {
+      "get": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Get All Prompts",
+        "description": "Get all prompts from the database with optional filtering.",
+        "operationId": "get_all_prompts_api_v1_prompt__get",
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subject"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tag"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Create Prompt Endpoint",
+        "description": "Create a new prompt in the database.",
+        "operationId": "create_prompt_endpoint_api_v1_prompt__post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/{prompt_id}": {
+      "put": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Update Prompt Endpoint",
+        "description": "Update a prompt in the database.",
+        "operationId": "update_prompt_endpoint_api_v1_prompt__prompt_id__put",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Delete Prompt Endpoint",
+        "description": "Delete a prompt from the database.",
+        "operationId": "delete_prompt_endpoint_api_v1_prompt__prompt_id__delete",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/{prompt_id}/duplicate": {
+      "post": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Duplicate Prompt Endpoint",
+        "description": "Duplicate a prompt.",
+        "operationId": "duplicate_prompt_endpoint_api_v1_prompt__prompt_id__duplicate_post",
+        "parameters": [
+          {
+            "name": "prompt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Prompt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/batch-delete": {
+      "post": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Batch Delete Prompts Endpoint",
+        "description": "Delete multiple prompts.",
+        "operationId": "batch_delete_prompts_endpoint_api_v1_prompt_batch_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/export": {
+      "get": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Export Prompts Endpoint",
+        "description": "Export all prompts.",
+        "operationId": "export_prompts_endpoint_api_v1_prompt_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromptsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/prompt/import": {
+      "post": {
+        "tags": [
+          "prompt"
+        ],
+        "summary": "Import Prompts Endpoint",
+        "description": "Import prompts.",
+        "operationId": "import_prompts_endpoint_api_v1_prompt_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPromptsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/history/": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get History",
+        "description": "Get the history of generated visualizations.",
+        "operationId": "get_history_api_v1_history__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/history/{entry_id}": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get History Entry",
+        "description": "Get a specific history entry by ID.",
+        "operationId": "get_history_entry_api_v1_history__entry_id__get",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryEntryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Delete History Entry",
+        "description": "Delete a history entry.",
+        "operationId": "delete_history_entry_api_v1_history__entry_id__delete",
+        "parameters": [
+          {
+            "name": "entry_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entry Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models/models/{subject}": {
+      "get": {
+        "tags": [
+          "models"
+        ],
+        "summary": "Get Available Models",
+        "description": "Get available models for a subject.",
+        "operationId": "get_available_models_api_v1_models_models__subject__get",
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Subject"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rag/similar": {
+      "get": {
+        "tags": [
+          "rag"
+        ],
+        "summary": "Get Similar Visualizations",
+        "description": "Get similar visualizations based on the query text.",
+        "operationId": "get_similar_visualizations_api_v1_rag_similar_get",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Query"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 5,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  },
+                  "title": "Response Get Similar Visualizations Api V1 Rag Similar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rag/diverse-examples": {
+      "get": {
+        "tags": [
+          "rag"
+        ],
+        "summary": "Get Diverse Examples",
+        "description": "Get one example of each visualization type from the vector store.",
+        "operationId": "get_diverse_examples_api_v1_rag_diverse_examples_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Get Diverse Examples Api V1 Rag Diverse Examples Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/rag/retrieve-similar": {
+      "post": {
+        "tags": [
+          "rag"
+        ],
+        "summary": "Retrieve Similar Visualizations",
+        "description": "Retrieve similar visualizations/snippets based on user prompt and config.",
+        "operationId": "retrieve_similar_visualizations_api_v1_rag_retrieve_similar_post",
+        "parameters": [
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Number of similar results to return",
+              "default": 10,
+              "title": "Top K"
+            },
+            "description": "Number of similar results to return"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetrieveSimilarResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/async-visualizations/generate-async": {
+      "post": {
+        "tags": [
+          "async-visualizations"
+        ],
+        "summary": "Generate Visualization Async",
+        "description": "Start async visualization generation and return task ID immediately.\n\nReturns:\n    Dict with task_id for polling status",
+        "operationId": "generate_visualization_async_api_v1_async_visualizations_generate_async_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Generate Visualization Async Api V1 Async Visualizations Generate Async Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/async-visualizations/status/{task_id}": {
+      "get": {
+        "tags": [
+          "async-visualizations"
+        ],
+        "summary": "Get Task Status",
+        "description": "Get the current status of a visualization generation task.",
+        "operationId": "get_task_status_api_v1_async_visualizations_status__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Task Status Api V1 Async Visualizations Status  Task Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/async-visualizations/result/{task_id}": {
+      "get": {
+        "tags": [
+          "async-visualizations"
+        ],
+        "summary": "Get Task Result",
+        "description": "Get the result of a completed visualization generation task.",
+        "operationId": "get_task_result_api_v1_async_visualizations_result__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/async-visualizations/cancel/{task_id}": {
+      "delete": {
+        "tags": [
+          "async-visualizations"
+        ],
+        "summary": "Cancel Task",
+        "description": "Cancel a running visualization generation task.",
+        "operationId": "cancel_task_api_v1_async_visualizations_cancel__task_id__delete",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Cancel Task Api V1 Async Visualizations Cancel  Task Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/async-visualizations/tasks": {
+      "get": {
+        "tags": [
+          "async-visualizations"
+        ],
+        "summary": "List Recent Tasks",
+        "description": "List recent visualization generation tasks.",
+        "operationId": "list_recent_tasks_api_v1_async_visualizations_tasks_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response List Recent Tasks Api V1 Async Visualizations Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Health check endpoint that returns system configuration and status.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BatchDeleteRequest": {
+        "properties": {
+          "prompt_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Prompt Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompt_ids"
+        ],
+        "title": "BatchDeleteRequest"
+      },
+      "Body_create_gold_standards_api_v1_gold_standards__post": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "type": "array",
+            "title": "Files",
+            "description": "One or more HTML files to analyze and ingest as gold standards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "files"
+        ],
+        "title": "Body_create_gold_standards_api_v1_gold_standards__post"
+      },
+      "ComponentConfig": {
+        "properties": {
+          "component_name": {
+            "type": "string",
+            "title": "Component Name",
+            "description": "Name of a 3D component required in the 3D scene (max 50 chars)"
+          },
+          "component_description": {
+            "type": "string",
+            "title": "Component Description",
+            "description": "Description of what this component represents in the 3D scene (max 100 chars)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "component_name",
+          "component_description"
+        ],
+        "title": "ComponentConfig"
+      },
+      "CreatePromptRequest": {
+        "properties": {
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject",
+          "topic",
+          "content"
+        ],
+        "title": "CreatePromptRequest"
+      },
+      "CurvePoint": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "z": {
+            "type": "number",
+            "title": "Z"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "CurvePoint"
+      },
+      "EnhancementRequest": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "subject",
+          "provider"
+        ],
+        "title": "EnhancementRequest"
+      },
+      "GenerateRequest": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject",
+            "default": "physics"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "default": "ollama"
+          },
+          "modelType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modeltype",
+            "default": "generated"
+          },
+          "selectedModel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selectedmodel"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PromptConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic"
+        ],
+        "title": "GenerateRequest"
+      },
+      "GoldStandardResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "metadata": {
+            "type": "object",
+            "title": "Metadata"
+          },
+          "distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance"
+          },
+          "html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "metadata"
+        ],
+        "title": "GoldStandardResponse"
+      },
+      "GoldStandardUpdate": {
+        "properties": {
+          "html": {
+            "type": "string",
+            "title": "Html",
+            "default": ""
+          },
+          "metadata": {
+            "type": "object",
+            "title": "Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "metadata"
+        ],
+        "title": "GoldStandardUpdate"
+      },
+      "HTMLResponse": {
+        "properties": {
+          "html": {
+            "type": "string",
+            "title": "Html"
+          },
+          "validation_results": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "html"
+        ],
+        "title": "HTMLResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HistoryEntryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "prompt": {
+            "type": "string",
+            "title": "Prompt"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "html": {
+            "type": "string",
+            "title": "Html"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp"
+          },
+          "config": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "prompt",
+          "provider",
+          "subject",
+          "html",
+          "timestamp"
+        ],
+        "title": "HistoryEntryResponse"
+      },
+      "HistoryResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryEntryResponse"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "title": "HistoryResponse"
+      },
+      "ImportPromptsRequest": {
+        "properties": {
+          "prompts": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Prompts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompts"
+        ],
+        "title": "ImportPromptsRequest"
+      },
+      "LightClass": {
+        "type": "string",
+        "enum": [
+          "DirectionalLight",
+          "AmbientLight",
+          "HemisphereLight"
+        ],
+        "title": "LightClass"
+      },
+      "LightConfig": {
+        "properties": {
+          "light_type": {
+            "type": "string",
+            "maxLength": 50,
+            "title": "Light Type",
+            "description": "Type of light (max 50 chars)"
+          },
+          "light_class": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LightClass"
+              }
+            ],
+            "description": "THREE.LightClass (choose between DirectionalLight, AmbientLight, HemisphereLight)"
+          },
+          "light_color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "title": "Light Color",
+            "description": "Hex color code for the light (#RRGGBB)"
+          },
+          "intensity": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Intensity",
+            "description": "Light intensity (0.0-1.0)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "light_type",
+          "light_class",
+          "light_color",
+          "intensity"
+        ],
+        "title": "LightConfig"
+      },
+      "MaterialConfig": {
+        "properties": {
+          "material_name": {
+            "type": "string",
+            "title": "Material Name",
+            "description": "Name of the material (based on the components)"
+          },
+          "material_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaterialType"
+              }
+            ],
+            "description": "Type of material (choose between MeshStandardMaterial, MeshPhysicalMaterial, MeshPhongMaterial)"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "title": "Color",
+            "description": "Hex color code for the material (#RRGGBB)"
+          },
+          "metalness": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Metalness",
+            "description": "Metalness value (0.0-1.0)"
+          },
+          "roughness": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Roughness",
+            "description": "Roughness value (0.0-1.0)"
+          },
+          "emissive": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "title": "Emissive",
+            "description": "Hex color code for the emissive property (#RRGGBB)"
+          },
+          "emissiveIntensity": {
+            "type": "number",
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Emissiveintensity",
+            "description": "Emissive intensity (0.0-1.0)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "material_name",
+          "material_type",
+          "color",
+          "metalness",
+          "roughness",
+          "emissive",
+          "emissiveIntensity"
+        ],
+        "title": "MaterialConfig"
+      },
+      "MaterialType": {
+        "type": "string",
+        "enum": [
+          "MeshStandardMaterial",
+          "MeshPhysicalMaterial",
+          "MeshPhongMaterial"
+        ],
+        "title": "MaterialType"
+      },
+      "ModelsResponse": {
+        "properties": {
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "models"
+        ],
+        "title": "ModelsResponse"
+      },
+      "PromptConfig": {
+        "properties": {
+          "topic_name": {
+            "type": "string",
+            "title": "Topic Name"
+          },
+          "key_concepts": {
+            "type": "string",
+            "title": "Key Concepts"
+          },
+          "three_js_url": {
+            "type": "string",
+            "title": "Three Js Url"
+          },
+          "orbit_controls_url": {
+            "type": "string",
+            "title": "Orbit Controls Url"
+          },
+          "additional_imports_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Additional Imports Comment"
+          },
+          "education_level": {
+            "type": "string",
+            "title": "Education Level"
+          },
+          "learning_objectives": {
+            "type": "string",
+            "title": "Learning Objectives"
+          },
+          "interactive_features": {
+            "type": "string",
+            "title": "Interactive Features"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentConfig"
+            },
+            "type": "array",
+            "title": "Components"
+          },
+          "materials": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialConfig"
+            },
+            "type": "array",
+            "title": "Materials"
+          },
+          "lights": {
+            "items": {
+              "$ref": "#/components/schemas/LightConfig"
+            },
+            "type": "array",
+            "title": "Lights"
+          },
+          "renderer": {
+            "$ref": "#/components/schemas/RendererConfig"
+          },
+          "camera_controls": {
+            "type": "string",
+            "title": "Camera Controls"
+          },
+          "interactive_description": {
+            "type": "string",
+            "title": "Interactive Description"
+          },
+          "animated_elements": {
+            "type": "string",
+            "title": "Animated Elements"
+          },
+          "curve_points": {
+            "items": {
+              "$ref": "#/components/schemas/CurvePoint"
+            },
+            "type": "array",
+            "title": "Curve Points"
+          },
+          "animation_speed": {
+            "type": "number",
+            "title": "Animation Speed"
+          },
+          "tts_language": {
+            "type": "string",
+            "title": "Tts Language"
+          },
+          "tts_rate": {
+            "type": "number",
+            "title": "Tts Rate"
+          },
+          "tts_pitch": {
+            "type": "number",
+            "title": "Tts Pitch"
+          },
+          "intro_narration_texts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Intro Narration Texts"
+          },
+          "supporting_narration_texts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Supporting Narration Texts"
+          },
+          "scene_description": {
+            "type": "string",
+            "title": "Scene Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic_name",
+          "key_concepts",
+          "three_js_url",
+          "orbit_controls_url",
+          "education_level",
+          "learning_objectives",
+          "interactive_features",
+          "components",
+          "materials",
+          "lights",
+          "renderer",
+          "camera_controls",
+          "interactive_description",
+          "animated_elements",
+          "curve_points",
+          "animation_speed",
+          "tts_language",
+          "tts_rate",
+          "tts_pitch",
+          "intro_narration_texts",
+          "supporting_narration_texts",
+          "scene_description"
+        ],
+        "title": "PromptConfig"
+      },
+      "PromptResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "subject",
+          "topic",
+          "content",
+          "category",
+          "tags"
+        ],
+        "title": "PromptResponse"
+      },
+      "PromptsResponse": {
+        "properties": {
+          "prompts": {
+            "items": {
+              "$ref": "#/components/schemas/PromptResponse"
+            },
+            "type": "array",
+            "title": "Prompts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prompts"
+        ],
+        "title": "PromptsResponse"
+      },
+      "RendererConfig": {
+        "properties": {
+          "antialias": {
+            "type": "boolean",
+            "title": "Antialias"
+          },
+          "shadowMapEnabled": {
+            "type": "boolean",
+            "title": "Shadowmapenabled"
+          },
+          "shadowMapType": {
+            "type": "string",
+            "title": "Shadowmaptype"
+          },
+          "toneMapping": {
+            "type": "string",
+            "title": "Tonemapping"
+          },
+          "outputColorSpace": {
+            "type": "string",
+            "title": "Outputcolorspace",
+            "default": "SRGBColorSpace"
+          }
+        },
+        "type": "object",
+        "required": [
+          "antialias",
+          "shadowMapEnabled",
+          "shadowMapType",
+          "toneMapping"
+        ],
+        "title": "RendererConfig"
+      },
+      "RetrieveSimilarResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "RetrieveSimilarResponse"
+      },
+      "SuccessResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "SuccessResponse"
+      },
+      "UpdatePromptRequest": {
+        "properties": {
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "title": "UpdatePromptRequest"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VisualizationCreate": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "html_content": {
+            "type": "string",
+            "title": "Html Content"
+          },
+          "config": {
+            "type": "object",
+            "title": "Config"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "subject",
+          "html_content",
+          "config"
+        ],
+        "title": "VisualizationCreate"
+      },
+      "VisualizationResponse": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "title": "Topic"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "html_content": {
+            "type": "string",
+            "title": "Html Content"
+          },
+          "config": {
+            "type": "object",
+            "title": "Config"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "embedding": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "subject",
+          "html_content",
+          "config",
+          "id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "VisualizationResponse"
+      }
+    }
+  }
+}
