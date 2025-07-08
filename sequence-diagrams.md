@@ -155,4 +155,4 @@ sequenceDiagram
    - Generation errors from LLM
    - Runtime errors in Three.js code
    - Network errors
-   - Database errors 
+   - Database errors
