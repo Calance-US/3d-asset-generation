@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 
 import aiohttp
+from app.auth.dependencies import get_current_user
 from app.config.settings import settings
 from app.database.database import (
     batch_delete_prompts,
@@ -15,6 +16,7 @@ from app.database.database import (
     import_prompts,
     update_prompt,
 )
+from app.models import User
 from app.schemas.schemas import (
     BatchDeleteRequest,
     CreatePromptRequest,
@@ -296,7 +298,9 @@ async def get_all_prompts(
 
 @router.post("/", response_model=PromptResponse)
 async def create_prompt_endpoint(
-    prompt_data: CreatePromptRequest, db: Session = Depends(get_db)
+    prompt_data: CreatePromptRequest, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ) -> PromptResponse:
     """Create a new prompt in the database."""
     try:
@@ -307,6 +311,7 @@ async def create_prompt_endpoint(
             content=prompt_data.content,
             category=prompt_data.category,
             tags=",".join(prompt_data.tags) if prompt_data.tags else "",
+            user_id=current_user.id,
         )
         prompt_selector.initialize_index()
         return PromptResponse(

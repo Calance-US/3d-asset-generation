@@ -25,7 +25,6 @@ from app.services.error_fixing.error_fixing_service import ErrorFixingService
 from app.services.prompt_generator import PromptGenerator
 from app.services.rag.embedding_service import EmbeddingService
 from app.services.rag.vector_store import get_vector_store
-from app.services.validation.simple_orchestrator import SimpleValidationOrchestrator
 from app.utils.embedding_utils import build_embedding_text_from_config
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import HTMLResponse
@@ -44,19 +43,32 @@ class TaskStatus(Enum):
     TIMEOUT = "timeout"
 
 
-# Define stage names for visualization generation
-VISUALIZATION_STAGES = [
+# Define base stage names for visualization generation
+BASE_VISUALIZATION_STAGES = [
     "initialization",
     "context_retrieval",
     "prompt_generation",
     "llm_generation",
-    "validation_attempt_1",
-    "validation_attempt_2",
-    "validation_attempt_3",
-    "validation_attempt_4",
     "result_preparation",
     "finalization",
 ]
+
+def get_visualization_stages() -> List[str]:
+    """Get the complete list of visualization stages including validation attempts."""
+    stages = BASE_VISUALIZATION_STAGES.copy()
+    
+    # Insert validation attempts before result_preparation
+    validation_index = stages.index("result_preparation")
+    for i in range(1, settings.MAX_VALIDATION_ATTEMPTS + 1):
+        stages.insert(validation_index, f"validation_attempt_{i}")
+    
+    # Insert post-validation enhancement stage after validation attempts
+    enhancement_index = validation_index + settings.MAX_VALIDATION_ATTEMPTS
+    stages.insert(enhancement_index, "post_validation_enhancement")
+    
+    return stages
+
+VISUALIZATION_STAGES = get_visualization_stages()
 
 
 router = APIRouter()
@@ -64,8 +76,11 @@ logger = logging.getLogger(__name__)
 
 # Initialize services
 prompt_generator = PromptGenerator()
-validation_orchestrator = SimpleValidationOrchestrator()
 error_fixing_service = ErrorFixingService()
+
+# Initialize validation orchestrator
+from app.services.validation.validation_orchestrator import ValidationOrchestrator
+validation_orchestrator = ValidationOrchestrator()
 
 
 # Database-backed task management functions
@@ -229,21 +244,33 @@ def fail_task_stage(
     details: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Fail a task stage."""
-    stage: Optional[AsyncTaskStage] = (
-        db.query(AsyncTaskStage)
-        .filter(AsyncTaskStage.task_id == task_id, AsyncTaskStage.name == stage_name)
-        .first()
-    )
-    if stage is not None:
-        stage.status = "failed"  # type: ignore
-        stage.completed_at = datetime.utcnow()  # type: ignore
-        stage.error_message = error_message  # type: ignore
-        if details:
-            stage.details = details  # type: ignore
-        db.commit()
+    try:
+        stage: Optional[AsyncTaskStage] = (
+            db.query(AsyncTaskStage)
+            .filter(AsyncTaskStage.task_id == task_id, AsyncTaskStage.name == stage_name)
+            .first()
+        )
+        if stage is not None:
+            stage.status = "failed"  # type: ignore
+            stage.completed_at = datetime.utcnow()  # type: ignore
+            stage.error_message = error_message  # type: ignore
+            if details:
+                stage.details = details  # type: ignore
+            db.commit()
 
-    # Fail the entire task
-    update_task_status(db, task_id, "failed", error_message)
+        # Fail the entire task
+        update_task_status(db, task_id, "failed", error_message)
+    except Exception as e:
+        logger.error(f"Error in fail_task_stage: {e}")
+        try:
+            db.rollback()
+        except Exception as rollback_error:
+            logger.error(f"Failed to rollback session in fail_task_stage: {rollback_error}")
+        # Try to update task status even if stage update failed
+        try:
+            update_task_status(db, task_id, "failed", error_message)
+        except Exception as status_error:
+            logger.error(f"Failed to update task status in fail_task_stage: {status_error}")
 
 
 def complete_task(db: Session, task_id: str, result: Dict[str, Any]) -> None:
@@ -291,7 +318,7 @@ async def generate_visualization_async(
         )
 
         # Start background processing
-        background_tasks.add_task(_process_visualization_generation, task_id, request)
+        background_tasks.add_task(_process_visualization_generation, task_id, request, current_user.id)
 
         return {
             "task_id": task_id,
@@ -540,7 +567,7 @@ async def list_recent_tasks(
     }
 
 
-async def _process_visualization_generation(task_id: str, request: GenerateRequest):
+async def _process_visualization_generation(task_id: str, request: GenerateRequest, user_id: int):
     """Process visualization generation in background."""
     db = next(get_db())
     start_time = time.time()  # Track generation time
@@ -550,6 +577,11 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
         )
 
         logger.info(f"[{task_id}] Starting visualization generation")
+        logger.info(f"[{task_id}] Request type: {type(request)}")
+        logger.info(f"[{task_id}] Request config type: {type(request.config) if request.config else 'None'}")
+        if request.config:
+            logger.info(f"[{task_id}] Request config has components: {hasattr(request.config, 'components')}")
+            logger.info(f"[{task_id}] Request config components: {getattr(request.config, 'components', 'NOT_FOUND')}")
         update_task_stage(db, task_id, "initialization", 25, "Initializing services")
 
         # Initialize services
@@ -750,16 +782,70 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
             )
             return
 
-        # Validation attempts
+        # Validation attempts with HTML error fixing
         best_quality_score = 0
         best_html_content = html_content
         validation_results = []
+        current_html_content = html_content
+        quality_enhancement_attempts = 0
+        max_quality_enhancement_attempts = settings.QUALITY_ENHANCEMENT_MAX_ATTEMPTS
 
-        for attempt in range(1, 5):  # 4 validation attempts
+        for attempt in range(1, settings.MAX_VALIDATION_ATTEMPTS + 1):  # Configurable validation attempts
             stage_name = f"validation_attempt_{attempt}"
             start_task_stage(db, task_id, stage_name, f"Validation attempt {attempt}")
 
             try:
+                # For attempts after the first one, fix HTML errors from previous validation
+                if attempt > 1 and settings.ENABLE_ERROR_FIXING:
+                    update_task_stage(
+                        db,
+                        task_id,
+                        stage_name,
+                        10,
+                        f"Fixing HTML errors from previous validation (attempt {attempt})",
+                    )
+
+                    # Get errors from previous validation attempt
+                    if validation_results:
+                        previous_validation = validation_results[-1]
+                        previous_errors = previous_validation.get("real_errors", [])  # Use real errors
+                    else:
+                        previous_errors = []
+                    
+                    if previous_errors:
+                        logger.info(
+                            f"[{task_id}] Fixing HTML errors for attempt {attempt}",
+                            extra={
+                                "attempt": attempt,
+                                "previous_quality_score": previous_validation.get("quality_score", 0) if 'previous_validation' in locals() else 0,
+                                "errors_to_fix": len(previous_errors),
+                            },
+                        )
+                        
+                        # Fix HTML errors using the enhanced error fixing service
+                        fixing_result = await enhanced_error_fixing_service.fix_html_errors(
+                            current_html_content,
+                            previous_errors,
+                            request.provider,
+                        )
+                        
+                        if fixing_result.get("success") and fixing_result.get("fixed_html"):
+                            current_html_content = fixing_result["fixed_html"]
+                            logger.info(
+                                f"[{task_id}] Successfully fixed HTML for attempt {attempt}",
+                                extra={
+                                    "attempt": attempt,
+                                    "errors_addressed": fixing_result.get("errors_addressed", 0),
+                                    "new_content_length": len(current_html_content),
+                                },
+                            )
+                        else:
+                            logger.warning(
+                                f"[{task_id}] Failed to fix HTML for attempt {attempt}: {fixing_result.get('error', 'Unknown error')}"
+                            )
+                    else:
+                        logger.info(f"[{task_id}] No errors to fix for attempt {attempt}")
+
                 update_task_stage(
                     db,
                     task_id,
@@ -768,9 +854,12 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     f"Validating content (attempt {attempt})",
                 )
 
-                # Perform validation
-                validation_result = await validation_orchestrator.validate_html_content(
-                    html_content
+                # Perform validation on current HTML content
+                validation_result = await validation_orchestrator.validate_content(
+                    html_content=current_html_content,
+                    title="3D Visualization",
+                    subject=request.subject,
+                    education_level="high school"
                 )
 
                 update_task_stage(
@@ -781,20 +870,133 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     f"Processing validation results (attempt {attempt})",
                 )
 
+                # Try to get quality score from different possible locations
                 current_quality_score = validation_result.get(
                     "overall_quality_score", 0
                 )
-                validation_errors = validation_result.get("errors", [])
+                
+                if current_quality_score == 0:
+                    # Try from overall_result
+                    overall_result = validation_result.get("overall_result", {})
+                    current_quality_score = overall_result.get("overall_score", 0)
+                    
+                    # Try from quality_assessment
+                    if current_quality_score == 0:
+                        quality_assessment = validation_result.get("quality_assessment", {})
+                        if quality_assessment and "metrics" in quality_assessment:
+                            metrics = quality_assessment["metrics"]
+                            current_quality_score = metrics.get("overall_quality_score", 0)
 
-                # Store validation result
-                validation_results.append(
-                    {
-                        "attempt": attempt,
-                        "quality_score": current_quality_score,
-                        "errors_count": len(validation_errors),
-                        "errors": validation_errors,
-                    }
+                # Extract errors from validation result structure
+                validation_errors = []
+                
+                # Check for errors in phase results
+                phase_results = validation_result.get("phase_results", {})
+                for phase_name, phase_result in phase_results.items():
+                    if phase_result and not phase_result.get("error"):
+                        # Check for issues in each phase
+                        issues = phase_result.get("issues", [])
+                        for issue in issues:
+                            validation_errors.append({
+                                "phase": phase_name,
+                                "type": issue.get("type", "unknown"),
+                                "message": issue.get("message", "Unknown error"),
+                                "severity": issue.get("severity", 1)
+                            })
+                
+                # Check quality assessment for critical issues
+                quality_assessment = validation_result.get("quality_assessment", {})
+                if quality_assessment and "metrics" in quality_assessment:
+                    metrics = quality_assessment["metrics"]
+                    critical_issues = metrics.get("critical_issues", 0)
+                    major_issues = metrics.get("major_issues", 0)
+                    
+                    if critical_issues > 0:
+                        validation_errors.append({
+                            "phase": "quality",
+                            "type": "critical",
+                            "message": f"{critical_issues} critical quality issues detected",
+                            "severity": 5
+                        })
+                    
+                    if major_issues > 0:
+                        validation_errors.append({
+                            "phase": "quality", 
+                            "type": "major",
+                            "message": f"{major_issues} major quality issues detected",
+                            "severity": 3
+                        })
+                
+                # Check overall result for failures
+                overall_result = validation_result.get("overall_result", {})
+                if overall_result and not overall_result.get("success", True):
+                    validation_errors.append({
+                        "phase": "overall",
+                        "type": "validation_failure",
+                        "message": "Overall validation failed",
+                        "severity": 4
+                    })
+
+                # Filter out false positive errors (like JavaScript keywords flagged as units)
+                real_errors = []
+                for error in validation_errors:
+                    # Skip false positive unit errors from scientific validator
+                    if (error.get("phase") == "scientific" and 
+                        error.get("type") == "error" and 
+                        "Invalid or inappropriate unit" in error.get("message", "") and
+                        any(keyword in error.get("message", "").lower() for keyword in 
+                            ["const", "material", "value", "pos", "d", "bands", "standard", "color"])):
+                        continue
+                    real_errors.append(error)
+
+                # Store validation result with improvement info
+                validation_result_data = {
+                    "attempt": attempt,
+                    "quality_score": current_quality_score,
+                    "errors_count": len(real_errors),  # Use real errors count
+                    "total_errors_detected": len(validation_errors),  # Keep track of total detected
+                    "errors": validation_errors,  # Keep all errors for debugging
+                    "real_errors": real_errors,  # Store filtered real errors
+                    "overall_quality_score": current_quality_score,  # For compatibility
+                }
+
+                # Add error fixing information for attempts after the first
+                if attempt > 1 and settings.ENABLE_ERROR_FIXING:
+                    validation_result_data["error_fixing_applied"] = True
+                    validation_result_data["previous_errors_count"] = len(previous_errors) if 'previous_errors' in locals() else 0
+                    validation_result_data["errors_fixed"] = fixing_result.get("errors_addressed", 0) if 'fixing_result' in locals() else 0
+                    validation_result_data["real_errors_fixed"] = len(real_errors) if real_errors else 0
+                else:
+                    validation_result_data["error_fixing_applied"] = False
+                
+                # Add quality enhancement information
+                validation_result_data["quality_enhancement_attempts"] = quality_enhancement_attempts
+                validation_result_data["max_quality_enhancement_attempts"] = max_quality_enhancement_attempts
+                validation_result_data["quality_enhancement_applied"] = 'enhancement_result' in locals()
+                if 'enhancement_result' in locals():
+                    validation_result_data["quality_improvement"] = enhancement_result.quality_improvement
+                    validation_result_data["enhancement_strategy"] = enhancement_result.strategy_used.category.value if enhancement_result.strategy_used else None
+
+                validation_results.append(validation_result_data)
+
+                # Log detailed validation information
+                logger.info(
+                    f"[{task_id}] Validation attempt {attempt} completed: "
+                    f"quality_score={current_quality_score:.2f}, "
+                    f"real_errors_count={len(real_errors)}, "
+                    f"total_errors_detected={len(validation_errors)}, "
+                    f"quality_threshold={settings.QUALITY_SCORE_THRESHOLD}, "
+                    f"enable_error_fixing={settings.ENABLE_ERROR_FIXING}, "
+                    f"enable_quality_enhancement={settings.ENABLE_QUALITY_ENHANCEMENT}"
                 )
+                
+                if validation_errors:
+                    logger.info(f"[{task_id}] Total validation errors detected: {[e.get('message', 'Unknown') for e in validation_errors]}")
+                
+                if real_errors:
+                    logger.info(f"[{task_id}] Real validation errors (after filtering): {[e.get('message', 'Unknown') for e in real_errors]}")
+                else:
+                    logger.info(f"[{task_id}] No real validation errors found after filtering false positives")
 
                 update_task_stage(
                     db,
@@ -804,8 +1006,13 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     f"Quality score: {current_quality_score:.1f} (attempt {attempt})",
                 )
 
-                # Check if we should attempt error fixing
-                if validation_errors and settings.ENABLE_ERROR_FIXING:
+                # Check if we should attempt error fixing or quality enhancement
+                if real_errors and settings.ENABLE_ERROR_FIXING:
+                    logger.info(
+                        f"[{task_id}] Error fixing conditions met: "
+                        f"real errors found ({len(real_errors)} out of {len(validation_errors)} total), "
+                        f"error fixing enabled ({settings.ENABLE_ERROR_FIXING})"
+                    )
                     update_task_stage(
                         db,
                         task_id,
@@ -814,16 +1021,19 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                         f"Attempting error fixing (attempt {attempt})",
                     )
 
-                    # Attempt error fixing
-                    fixing_result = enhanced_error_fixing_service.fix_html_errors(
-                        html_content, validation_errors[:10], request.provider
+                    # Attempt error fixing with real errors only
+                    fixing_result = await enhanced_error_fixing_service.fix_html_errors(
+                        current_html_content, real_errors[:10], request.provider
                     )
 
                     if fixing_result.get("fixed_html"):
                         # Re-validate the fixed content
                         fixed_validation = (
-                            await validation_orchestrator.validate_html_content(
-                                fixing_result["fixed_html"]
+                            await validation_orchestrator.validate_content(
+                                html_content=fixing_result["fixed_html"],
+                                title="3D Visualization",
+                                subject=request.subject,
+                                education_level="high school"
                             )
                         )
                         fixed_quality_score = fixed_validation.get(
@@ -832,14 +1042,140 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
 
                         # Use fixed version if it's better
                         if fixed_quality_score > current_quality_score:
-                            html_content = fixing_result["fixed_html"]
+                            current_html_content = fixing_result["fixed_html"]
                             current_quality_score = fixed_quality_score
-                            validation_errors = fixed_validation.get("errors", [])
+                            # Extract errors from fixed validation result
+                            fixed_errors = []
+                            fixed_phase_results = fixed_validation.get("phase_results", {})
+                            for phase_name, phase_result in fixed_phase_results.items():
+                                if phase_result and not phase_result.get("error"):
+                                    issues = phase_result.get("issues", [])
+                                    for issue in issues:
+                                        fixed_errors.append({
+                                            "phase": phase_name,
+                                            "type": issue.get("type", "unknown"),
+                                            "message": issue.get("message", "Unknown error"),
+                                            "severity": issue.get("severity", 1)
+                                        })
+                            validation_errors = fixed_errors
+                
+                # Check if we should attempt quality enhancement (when few real errors and low quality)
+                elif (len(real_errors) < 5 and 
+                      current_quality_score < settings.QUALITY_SCORE_THRESHOLD and
+                      settings.ENABLE_QUALITY_ENHANCEMENT and
+                      quality_enhancement_attempts < max_quality_enhancement_attempts):
+                    
+                    quality_enhancement_attempts += 1
+                    
+                    logger.info(
+                        f"[{task_id}] Quality enhancement conditions met: "
+                        f"few real errors ({len(real_errors)}), "
+                        f"low quality ({current_quality_score:.2f} < {settings.QUALITY_SCORE_THRESHOLD}), "
+                        f"enhancement enabled ({settings.ENABLE_QUALITY_ENHANCEMENT}), "
+                        f"attempt {quality_enhancement_attempts}/{max_quality_enhancement_attempts}"
+                    )
+                    
+                    update_task_stage(
+                        db,
+                        task_id,
+                        stage_name,
+                        90,
+                        f"Attempting quality enhancement (attempt {quality_enhancement_attempts}/{max_quality_enhancement_attempts})",
+                    )
+
+                    # Attempt quality enhancement
+                    from app.services.quality_enhancement import QualityEnhancementService
+                    quality_enhancement_service = QualityEnhancementService()
+                    
+                    enhancement_result = await quality_enhancement_service.enhance_html_quality(
+                        html_content=current_html_content,
+                        current_quality_score=current_quality_score,
+                        target_quality_score=settings.QUALITY_SCORE_THRESHOLD,
+                        attempt_number=quality_enhancement_attempts,
+                        provider=request.provider
+                    )
+
+                    if enhancement_result.success and enhancement_result.quality_improvement > 0:
+                        # Re-validate the enhanced content
+                        enhanced_validation = (
+                            await validation_orchestrator.validate_content(
+                                html_content=enhancement_result.enhanced_html,
+                                title="3D Visualization",
+                                subject=request.subject,
+                                education_level="high school"
+                            )
+                        )
+                        enhanced_quality_score = enhanced_validation.get(
+                            "overall_quality_score", 0
+                        )
+
+                        # Use enhanced version if it's better
+                        if enhanced_quality_score > current_quality_score:
+                            current_html_content = enhancement_result.enhanced_html
+                            current_quality_score = enhanced_quality_score
+                            # Extract errors from enhanced validation result
+                            enhanced_errors = []
+                            enhanced_phase_results = enhanced_validation.get("phase_results", {})
+                            for phase_name, phase_result in enhanced_phase_results.items():
+                                if phase_result and not phase_result.get("error"):
+                                    issues = phase_result.get("issues", [])
+                                    for issue in issues:
+                                        enhanced_errors.append({
+                                            "phase": phase_name,
+                                            "type": issue.get("type", "unknown"),
+                                            "message": issue.get("message", "Unknown error"),
+                                            "severity": issue.get("severity", 1)
+                                        })
+                            validation_errors = enhanced_errors
+                            
+                            logger.info(
+                                f"[{task_id}] Quality enhancement successful: "
+                                f"{enhancement_result.quality_improvement:.2f} point improvement "
+                                f"using {enhancement_result.strategy_used.category.value if enhancement_result.strategy_used else 'unknown'} strategy"
+                            )
+                        else:
+                            logger.warning(
+                                f"[{task_id}] Quality enhancement did not improve score: "
+                                f"expected {enhancement_result.new_quality_score:.2f}, "
+                                f"got {enhanced_quality_score:.2f}"
+                            )
+                    else:
+                        logger.warning(
+                            f"[{task_id}] Quality enhancement failed: {enhancement_result.error_message}"
+                        )
+                
+                # Log when neither error fixing nor quality enhancement is attempted
+                if len(real_errors) >= 5 and current_quality_score < settings.QUALITY_SCORE_THRESHOLD:
+                    logger.info(
+                        f"[{task_id}] Neither error fixing nor quality enhancement attempted: "
+                        f"too many real errors ({len(real_errors)} >= 5), "
+                        f"low quality ({current_quality_score:.2f} < {settings.QUALITY_SCORE_THRESHOLD}), "
+                        f"error fixing enabled ({settings.ENABLE_ERROR_FIXING}), "
+                        f"quality enhancement enabled ({settings.ENABLE_QUALITY_ENHANCEMENT})"
+                    )
+                elif len(real_errors) < 5 and current_quality_score < settings.QUALITY_SCORE_THRESHOLD and quality_enhancement_attempts >= max_quality_enhancement_attempts:
+                    logger.info(
+                        f"[{task_id}] Quality enhancement max attempts reached: "
+                        f"few real errors ({len(real_errors)} < 5), "
+                        f"low quality ({current_quality_score:.2f} < {settings.QUALITY_SCORE_THRESHOLD}), "
+                        f"quality enhancement attempts exhausted ({quality_enhancement_attempts}/{max_quality_enhancement_attempts})"
+                    )
+                elif real_errors:
+                    logger.info(
+                        f"[{task_id}] Error fixing attempted but quality enhancement not triggered: "
+                        f"real errors found ({len(real_errors)}), "
+                        f"quality score ({current_quality_score:.2f})"
+                    )
+                elif current_quality_score >= settings.QUALITY_SCORE_THRESHOLD:
+                    logger.info(
+                        f"[{task_id}] Quality threshold met, no enhancement needed: "
+                        f"quality score ({current_quality_score:.2f} >= {settings.QUALITY_SCORE_THRESHOLD})"
+                    )
 
                 # Update best version if this is better
                 if current_quality_score > best_quality_score:
                     best_quality_score = current_quality_score
-                    best_html_content = html_content
+                    best_html_content = current_html_content
 
                 complete_task_stage(
                     db,
@@ -848,7 +1184,8 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     f"Validation complete - Quality: {current_quality_score:.1f}",
                     {
                         "quality_score": current_quality_score,
-                        "errors_count": len(validation_errors),
+                        "real_errors_count": len(real_errors),
+                        "total_errors_detected": len(validation_errors),
                         "best_so_far": current_quality_score == best_quality_score,
                     },
                 )
@@ -865,6 +1202,160 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     f"Validation attempt {attempt} failed: {str(e)}",
                 )
                 # Continue to next attempt
+
+        # NEW: Post-Validation Quality Enhancement Stage
+        if (best_quality_score < settings.QUALITY_SCORE_THRESHOLD and 
+            settings.ENABLE_QUALITY_ENHANCEMENT and
+            settings.ENABLE_POST_VALIDATION_ENHANCEMENT):
+            
+            start_task_stage(
+                db, 
+                task_id, 
+                "post_validation_enhancement", 
+                "Post-validation quality enhancement"
+            )
+            
+            try:
+                logger.info(
+                    f"[{task_id}] Starting post-validation quality enhancement: "
+                    f"best quality score ({best_quality_score:.2f} < {settings.QUALITY_SCORE_THRESHOLD}), "
+                    f"enhancement enabled ({settings.ENABLE_QUALITY_ENHANCEMENT})"
+                )
+                
+                update_task_stage(
+                    db,
+                    task_id,
+                    "post_validation_enhancement",
+                    25,
+                    "Analyzing content for quality improvement opportunities",
+                )
+
+                # Attempt quality enhancement with the best content so far
+                from app.services.quality_enhancement import QualityEnhancementService
+                quality_enhancement_service = QualityEnhancementService()
+                
+                # Double-check that enhancement is actually needed
+                if best_quality_score >= settings.QUALITY_ENHANCEMENT_SKIP_THRESHOLD:
+                    logger.warning(
+                        f"[{task_id}] Quality enhancement skipped - score already above skip threshold: "
+                        f"{best_quality_score:.2f} >= {settings.QUALITY_ENHANCEMENT_SKIP_THRESHOLD}"
+                    )
+                    complete_task_stage(
+                        db,
+                        task_id,
+                        "post_validation_enhancement",
+                        f"Quality enhancement skipped - score already quite good",
+                        {
+                            "quality_score": best_quality_score,
+                            "enhancement_successful": False,
+                            "reason": "Quality score already above skip threshold",
+                        },
+                    )
+                    # Skip to next stage instead of breaking
+                    pass
+                else:
+                    # Proceed with quality enhancement
+                    enhancement_result = await quality_enhancement_service.enhance_html_quality(
+                        html_content=best_html_content,
+                        current_quality_score=best_quality_score,
+                        target_quality_score=settings.QUALITY_SCORE_THRESHOLD,
+                        attempt_number=1,  # First post-validation attempt
+                        provider=request.provider
+                    )
+
+                    if enhancement_result.success and enhancement_result.quality_improvement > 0:
+                        update_task_stage(
+                            db,
+                            task_id,
+                            "post_validation_enhancement",
+                            75,
+                            f"Quality enhancement successful: +{enhancement_result.quality_improvement:.2f} points",
+                        )
+
+                        # Re-validate the enhanced content
+                        enhanced_validation = (
+                            await validation_orchestrator.validate_content(
+                                html_content=enhancement_result.enhanced_html,
+                                title="3D Visualization",
+                                subject=request.subject,
+                                education_level="high school"
+                            )
+                        )
+                        enhanced_quality_score = enhanced_validation.get(
+                            "overall_quality_score", 0
+                        )
+
+                        # Use enhanced version if it's better (with minimum improvement threshold)
+                        if enhanced_quality_score > (best_quality_score + settings.QUALITY_ENHANCEMENT_MIN_IMPROVEMENT):
+                            best_html_content = enhancement_result.enhanced_html
+                            best_quality_score = enhanced_quality_score
+                            
+                            logger.info(
+                                f"[{task_id}] Post-validation quality enhancement successful: "
+                                f"{enhancement_result.quality_improvement:.2f} point improvement "
+                                f"using {enhancement_result.strategy_used.category.value if enhancement_result.strategy_used else 'unknown'} strategy"
+                            )
+                            
+                            complete_task_stage(
+                                db,
+                                task_id,
+                                "post_validation_enhancement",
+                                f"Quality enhanced: {best_quality_score:.1f} (+{enhancement_result.quality_improvement:.2f})",
+                                {
+                                    "quality_score": best_quality_score,
+                                    "quality_improvement": enhancement_result.quality_improvement,
+                                    "enhancement_strategy": enhancement_result.strategy_used.category.value if enhancement_result.strategy_used else None,
+                                    "enhancement_successful": True,
+                                },
+                            )
+                        else:
+                            logger.warning(
+                                f"[{task_id}] Post-validation quality enhancement did not improve score: "
+                                f"expected {enhancement_result.new_quality_score:.2f}, "
+                                f"got {enhanced_quality_score:.2f}"
+                            )
+                            complete_task_stage(
+                                db,
+                                task_id,
+                                "post_validation_enhancement",
+                                f"Quality enhancement attempted but no improvement",
+                                {
+                                    "quality_score": best_quality_score,
+                                    "enhancement_successful": False,
+                                    "reason": "No score improvement after enhancement",
+                                },
+                            )
+                    else:
+                        logger.warning(
+                            f"[{task_id}] Post-validation quality enhancement failed: {enhancement_result.error_message}"
+                        )
+                        complete_task_stage(
+                            db,
+                            task_id,
+                            "post_validation_enhancement",
+                            f"Quality enhancement failed",
+                            {
+                                "quality_score": best_quality_score,
+                                "enhancement_successful": False,
+                                "error": enhancement_result.error_message,
+                            },
+                        )
+                    
+            except Exception as e:
+                logger.error(f"[{task_id}] Post-validation quality enhancement failed: {str(e)}")
+                fail_task_stage(
+                    db,
+                    task_id,
+                    "post_validation_enhancement",
+                    f"Post-validation quality enhancement failed: {str(e)}",
+                )
+        else:
+            logger.info(
+                f"[{task_id}] Post-validation quality enhancement skipped: "
+                f"quality threshold met ({best_quality_score:.2f} >= {settings.QUALITY_SCORE_THRESHOLD}) "
+                f"or enhancement disabled ({not settings.ENABLE_QUALITY_ENHANCEMENT}) "
+                f"or post-validation enhancement disabled ({not settings.ENABLE_POST_VALIDATION_ENHANCEMENT})"
+            )
 
         # Stage: Result Preparation
         start_task_stage(db, task_id, "result_preparation", "Preparing final result")
@@ -918,7 +1409,7 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                 generation_time = time.time() - start_time
 
                 # Create prompt entry if needed (optional)
-                prompt_id = _create_prompt_entry(db, request.model_dump())
+                prompt_id = _create_prompt_entry(db, request.model_dump(), user_id)
 
                 # Create comprehensive history entry using helper function
                 history_entry = _create_history_entry_data(
@@ -927,6 +1418,7 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     quality_score=best_quality_score,
                     generation_time=generation_time,
                     prompt_id=prompt_id,
+                    user_id=user_id,
                 )
 
                 created_entry = create_history_entry(db, history_entry)
@@ -941,6 +1433,11 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                 logger.warning(
                     f"[{task_id}] Failed to create history entry: {history_error}"
                 )
+                # Rollback the session to handle any database errors
+                try:
+                    db.rollback()
+                except Exception as rollback_error:
+                    logger.error(f"[{task_id}] Failed to rollback session: {rollback_error}")
                 # Don't fail the entire task for history creation issues
 
             complete_task_stage(
@@ -956,66 +1453,28 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
 
     except Exception as e:
         logger.error(f"[{task_id}] Unexpected error in task processing: {str(e)}")
-        update_task_status(db, task_id, "failed", f"Unexpected error: {str(e)}")
+        # Rollback the session before updating task status
+        try:
+            db.rollback()
+        except Exception as rollback_error:
+            logger.error(f"[{task_id}] Failed to rollback session: {rollback_error}")
+        
+        try:
+            update_task_status(db, task_id, "failed", f"Unexpected error: {str(e)}")
+        except Exception as status_error:
+            logger.error(f"[{task_id}] Failed to update task status: {status_error}")
     finally:
         db.close()
 
 
 async def _generate_with_provider(prompt: str, provider: str) -> str:
     """Generate visualization with specified provider."""
-    try:
-        if provider == "openai":
-            if not settings.OPENAI_API_KEY:
-                raise ValueError("OpenAI API key not configured")
-            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-            )
-            generated_text = response.choices[0].message.content
-            if not generated_text:
-                raise ValueError("No response from OpenAI")
-            return generated_text
-        elif provider == "gemini":
-            if not settings.GOOGLE_API_KEY:
-                raise ValueError("Google API key not configured")
-            import google.generativeai as genai
-
-            genai.configure(api_key=settings.GOOGLE_API_KEY)
-            model = genai.GenerativeModel(settings.GEMINI_MODEL)
-            response = await model.generate_content_async(
-                prompt,
-                safety_settings={
-                    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-                },
-            )
-            if not response.text:
-                raise ValueError("No response from Gemini")
-            return response.text
-        elif provider == "ollama":
-            # For now, fallback to OpenAI if Ollama is requested but not implemented
-            logger.warning("Ollama provider not implemented, falling back to OpenAI")
-            if not settings.OPENAI_API_KEY:
-                raise ValueError("OpenAI API key not configured for Ollama fallback")
-            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7,
-            )
-            generated_text = response.choices[0].message.content
-            if not generated_text:
-                raise ValueError("No response from OpenAI (Ollama fallback)")
-            return generated_text
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
-    except Exception as e:
-        logger.error(f"Error generating with provider {provider}: {e}")
-        raise
+    from app.utils.llm_utils import generate_with_provider
+    
+    result = await generate_with_provider(prompt, provider)
+    if not result:
+        raise ValueError(f"No response from {provider}")
+    return result
 
 
 def _extract_validation_errors(
@@ -1062,16 +1521,29 @@ def _extract_validation_errors(
     return errors
 
 
-def _create_prompt_entry(db: Session, request_data: Dict[str, Any]) -> Optional[int]:
+def _create_prompt_entry(db: Session, request_data: Dict[str, Any], user_id: Optional[int] = None) -> Optional[int]:
     """Create a prompt entry in the database."""
     try:
-        prompt_id = create_prompt(
+        # Extract config data if available
+        config = request_data.get("config", {})
+        
+        prompt = create_prompt(
             db=db,
             subject=request_data.get("subject", "physics"),
             topic=request_data.get("topic", ""),
             content=json.dumps(request_data),
+            key_concepts=config.get("key_concepts") if config else None,
+            education_level=config.get("education_level") if config else None,
+            learning_objectives=config.get("learning_objectives") if config else None,
+            interactive_features=config.get("interactive_features") if config else None,
+            user_id=user_id,
         )
-        return prompt_id
+        # Ensure we return the integer ID, not the Prompt object
+        if hasattr(prompt, 'id'):
+            return int(prompt.id)
+        else:
+            logger.error(f"Prompt object has no id attribute: {type(prompt)}")
+            return None
     except Exception as e:
         logger.error(f"Error creating prompt entry: {e}")
         return None
@@ -1083,14 +1555,24 @@ def _create_history_entry_data(
     quality_score: float,
     generation_time: float,
     prompt_id: Optional[int] = None,
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Create comprehensive history entry data with safe config extraction."""
 
-    def safe_json_dumps(data, default=None):
+    def safe_json_dumps(data, default="[]"):
         """Safely serialize data to JSON."""
         try:
             if data is None:
                 return default
+            # If data is already a string that looks like JSON, return it as is
+            if isinstance(data, str):
+                # Check if it's already a JSON string
+                try:
+                    json.loads(data)
+                    return data  # Already valid JSON, return as is
+                except json.JSONDecodeError:
+                    # Not JSON, continue with normal processing
+                    pass
             if hasattr(data, "model_dump"):
                 return json.dumps(data.model_dump())
             elif isinstance(data, list):
@@ -1100,17 +1582,21 @@ def _create_history_entry_data(
                         for item in data
                     ]
                 )
+            elif isinstance(data, dict):
+                return json.dumps(data)
             else:
                 return json.dumps(data)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to serialize data to JSON: {e}, data type: {type(data)}")
             return default
 
     history_entry = {
         "id": str(uuid.uuid4()),
         "prompt_id": prompt_id,
+        "user_id": user_id,
         "user_query": request.topic,
         "response": html_content,
-        "provider": request.provider,
+        "provider_id": None,  # TODO: Map provider string to provider_id
         "generation_time": generation_time,
         "created_at": datetime.utcnow(),
     }
@@ -1119,25 +1605,70 @@ def _create_history_entry_data(
     if request.config:
         try:
             config = request.config
+            logger.info(f"Extracting config data for history: config type={type(config)}")
+            
+            # Debug: Log the actual values being extracted
+            # Handle both Pydantic models and dictionaries
+            if hasattr(config, "components"):
+                # Pydantic model
+                components = getattr(config, "components", None)
+                materials = getattr(config, "materials", None)
+                lights = getattr(config, "lights", None)
+                intro_narration = getattr(config, "intro_narration_texts", None)
+                supporting_narration = getattr(config, "supporting_narration_texts", None)
+            else:
+                # Dictionary
+                components = config.get("components", None)
+                materials = config.get("materials", None)
+                lights = config.get("lights", None)
+                intro_narration = config.get("intro_narration_texts", None)
+                supporting_narration = config.get("supporting_narration_texts", None)
+            
+            logger.info(f"Config data extracted: components={type(components)}, materials={type(materials)}, lights={type(lights)}, intro_narration={type(intro_narration)}")
+            logger.info(f"Components value: {components}")
+            logger.info(f"Materials value: {materials}")
+            logger.info(f"Lights value: {lights}")
+            logger.info(f"Intro narration value: {intro_narration}")
+            logger.info(f"Supporting narration value: {supporting_narration}")
+            
+            # Test safe_json_dumps directly
+            components_json = safe_json_dumps(components, "[]")
+            materials_json = safe_json_dumps(materials, "[]")
+            lights_json = safe_json_dumps(lights, "[]")
+            intro_narration_json = safe_json_dumps(intro_narration, "[]")
+            supporting_narration_json = safe_json_dumps(supporting_narration, "[]")
+            
+            logger.info(f"JSON serialized: components={components_json[:100]}..., materials={materials_json[:100]}..., lights={lights_json[:100]}...")
+            logger.info(f"JSON serialized: intro_narration={intro_narration_json[:100]}..., supporting_narration={supporting_narration_json[:100]}...")
+            
             history_entry.update(
                 {
-                    "components": safe_json_dumps(getattr(config, "components", None)),
-                    "materials": safe_json_dumps(getattr(config, "materials", None)),
-                    "lights": safe_json_dumps(getattr(config, "lights", None)),
+                    # Component and material fields
+                    "components": components_json,
+                    "materials": materials_json,
+                    "lights": lights_json,
+                    
+                    # Renderer and animation settings
                     "render_settings": safe_json_dumps(
-                        getattr(config, "renderer", None)
+                        config.renderer if hasattr(config, "renderer") else config.get("renderer", None), "{}"
                     ),
-                    "animation_speed": getattr(config, "animation_speed", 1.0),
-                    "intro_narration_texts": safe_json_dumps(
-                        getattr(config, "intro_narration_texts", None)
-                    ),
-                    "supporting_narration_texts": safe_json_dumps(
-                        getattr(config, "supporting_narration_texts", None)
-                    ),
-                    "scene_description": getattr(config, "scene_description", None),
+                    "animation_speed": config.animation_speed if hasattr(config, "animation_speed") else config.get("animation_speed", 1.0),
+                    
+                    # Narration texts
+                    "intro_narration_texts": intro_narration_json,
+                    "supporting_narration_texts": supporting_narration_json,
+                    
+                    # Scene description
+                    "scene_description": config.scene_description if hasattr(config, "scene_description") else config.get("scene_description", None),
                 }
             )
+            
+            logger.info(f"History entry updated with config data: components={history_entry.get('components')[:100]}...")
         except Exception as e:
             logger.warning(f"Failed to extract config data for history: {e}")
+            import traceback
+            logger.warning(f"Traceback: {traceback.format_exc()}")
+    else:
+        logger.warning("No config found in request for history entry")
 
     return history_entry

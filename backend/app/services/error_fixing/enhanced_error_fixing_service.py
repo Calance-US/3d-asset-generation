@@ -662,7 +662,7 @@ Be extremely careful and systematic. Test each fix mentally before proceeding.
             ],
         )
 
-    def fix_html_errors(
+    async def fix_html_errors(
         self, html_content: str, validation_errors: list, provider: str = "openai"
     ) -> dict:
         """
@@ -686,9 +686,24 @@ Be extremely careful and systematic. Test each fix mentally before proceeding.
                 target_quality_improvement=2.0,
             )
 
+            # Call the LLM to fix the HTML
+            from app.utils.llm_utils import generate_with_provider
+            
+            fixed_html = await generate_with_provider(fixing_prompt, provider)
+            
+            if not fixed_html:
+                logger.warning("LLM returned empty response for HTML fixing")
+                return {
+                    "success": False,
+                    "error": "LLM returned empty response",
+                    "fixed_html": html_content,
+                    "errors_addressed": 0,
+                    "provider": provider,
+                }
+
             return {
                 "success": True,
-                "fixed_html": html_content,  # Placeholder - would use LLM here
+                "fixed_html": fixed_html,
                 "prompt": fixing_prompt,
                 "errors_addressed": len(validation_errors),
                 "provider": provider,

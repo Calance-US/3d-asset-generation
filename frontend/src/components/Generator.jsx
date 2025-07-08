@@ -226,6 +226,9 @@ export default function Generator() {
             setStageMessage("Generation completed successfully");
             setCanCancel(false);
             setLoading(false);
+            
+            // Reload history to show the newly generated visualization
+            await loadHistory();
             return;
           }
 
@@ -547,6 +550,9 @@ export default function Generator() {
 
       setHtml(data.html);
       console.info("Regeneration completed successfully");
+      
+      // Reload history to show the newly regenerated visualization
+      await loadHistory();
     } catch (err) {
       console.error("Error during regeneration:", err);
       setError(`Error regenerating visualization: ${err.message}`);

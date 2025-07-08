@@ -102,6 +102,7 @@ def create_prompt(
     learning_objectives: Optional[str] = None,
     interactive_features: Optional[str] = None,
     tags: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> Prompt:
     """Create a new prompt in the database."""
     # Log the values being saved
@@ -118,6 +119,7 @@ def create_prompt(
                 "education_level": education_level,
                 "learning_objectives": learning_objectives,
                 "interactive_features": interactive_features,
+                "user_id": user_id,
             },
         },
     )
@@ -131,6 +133,7 @@ def create_prompt(
         education_level=education_level,
         learning_objectives=learning_objectives,
         interactive_features=interactive_features,
+        user_id=user_id,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -165,6 +168,7 @@ def create_prompt(
                 "education_level": prompt.education_level,
                 "learning_objectives": prompt.learning_objectives,
                 "interactive_features": prompt.interactive_features,
+                "user_id": prompt.user_id,
             },
         },
     )
@@ -272,6 +276,7 @@ def duplicate_prompt(db, prompt_id: int) -> Optional[Prompt]:
             topic=f"{original.topic} (Copy)",
             content=original.content,
             category=original.category,
+            user_id=original.user_id,  # Copy the user_id from the original prompt
         )
 
         # Copy tags
@@ -353,6 +358,7 @@ def import_prompts(db, prompts_data: List[Dict]) -> bool:
                 learning_objectives=prompt_data.get("learning_objectives"),
                 interactive_features=prompt_data.get("interactive_features"),
                 tags=prompt_data.get("tags", ""),
+                user_id=None,  # Imported prompts don't have a specific user
             )
         db.commit()
 
@@ -407,7 +413,7 @@ def migrate_from_json():
 
                 with open(prompt_file, "r") as f:
                     prompt_content = f.read()
-                    create_prompt(db, subject, prompt_file.stem, prompt_content)
+                    create_prompt(db, subject, prompt_file.stem, prompt_content, user_id=None)
 
     finally:
         db.close()

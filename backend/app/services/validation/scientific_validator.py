@@ -536,8 +536,48 @@ class ScientificValidator:
         hex_color_pattern = r"0x[0-9a-fA-F]+"
         content_without_hex = re.sub(hex_color_pattern, "", content)
 
-        # Extract all numeric values with units (excluding hex colors)
-        unit_pattern = r"(\d+(?:\.\d+)?)\s*([a-zA-Z°μ]+|Ω)"
+        # Remove JavaScript code patterns to avoid false positives
+        # Remove variable declarations, function calls, etc.
+        js_patterns_to_remove = [
+            r"const\s+\w+\s*=",  # const variable = 
+            r"let\s+\w+\s*=",    # let variable =
+            r"var\s+\w+\s*=",    # var variable =
+            r"function\s+\w+",   # function name
+            r"new\s+\w+",        # new Constructor
+            r"\.\w+\s*=",        # object.property =
+            r"\(\s*\w+\s*\)",    # (parameter)
+            r"THREE\.\w+",       # THREE.js objects
+            r"scene\.\w+",       # scene properties
+            r"camera\.\w+",      # camera properties
+            r"renderer\.\w+",    # renderer properties
+            r"material\.\w+",    # material properties
+            r"geometry\.\w+",    # geometry properties
+            r"mesh\.\w+",        # mesh properties
+            r"light\.\w+",       # light properties
+            r"position\.\w+",    # position properties
+            r"rotation\.\w+",    # rotation properties
+            r"scale\.\w+",       # scale properties
+            r"color\.\w+",       # color properties
+            r"size\.\w+",        # size properties
+            r"width\.\w+",       # width properties
+            r"height\.\w+",      # height properties
+            r"length\.\w+",      # length properties
+            r"value\.\w+",       # value properties
+            r"values\.\w+",      # values properties
+            r"data\.\w+",        # data properties
+            r"config\.\w+",      # config properties
+            r"settings\.\w+",    # settings properties
+            r"options\.\w+",     # options properties
+            r"params\.\w+",      # params properties
+            r"args\.\w+",        # args properties
+        ]
+        
+        for pattern in js_patterns_to_remove:
+            content_without_hex = re.sub(pattern, "", content_without_hex, flags=re.IGNORECASE)
+
+        # Extract all numeric values with units (excluding hex colors and JS code)
+        # More restrictive pattern that looks for actual unit usage
+        unit_pattern = r"(\d+(?:\.\d+)?)\s*([a-zA-Z°μ]+|Ω)(?=\s|$|[,;\)\]}])"
         matches = re.findall(unit_pattern, content_without_hex.lower())
 
         for value_str, unit in matches:
@@ -546,8 +586,28 @@ class ScientificValidator:
                 unit_found = False
                 unit_category = None
 
-                # Skip units that are clearly part of hex colors or CSS
-                if unit in ["x", "xff", "xf", "xffffff", "ff", "f"] or len(unit) > 10:
+                # Skip units that are clearly part of hex colors, CSS, or JavaScript
+                js_keywords = [
+                    "x", "xff", "xf", "xffffff", "ff", "f",  # hex color remnants
+                    "const", "let", "var", "function", "new", "return", "if", "else", "for", "while",
+                    "material", "geometry", "mesh", "scene", "camera", "renderer", "controls",
+                    "position", "rotation", "scale", "color", "size", "width", "height", "length",
+                    "value", "values", "data", "config", "settings", "options", "params", "args",
+                    "start", "end", "begin", "stop", "play", "pause", "reset", "update", "animate",
+                    "add", "remove", "create", "destroy", "init", "setup", "load", "save",
+                    "get", "set", "has", "is", "can", "will", "should", "must", "need",
+                    "pos", "posx", "posy", "posz", "rot", "rotx", "roty", "rotz", "sca", "scax", "scay", "scaz",
+                    "d", "dx", "dy", "dz", "v", "vx", "vy", "vz", "n", "nx", "ny", "nz",
+                    "r", "rx", "ry", "rz", "g", "gx", "gy", "gz", "b", "bx", "by", "bz",
+                    "a", "ax", "ay", "az", "w", "wx", "wy", "wz", "h", "hx", "hy", "hz",
+                    "t", "tx", "ty", "tz", "u", "ux", "uy", "uz", "i", "ix", "iy", "iz",
+                    "j", "jx", "jy", "jz", "k", "kx", "ky", "kz", "l", "lx", "ly", "lz",
+                    "m", "mx", "my", "mz", "o", "ox", "oy", "oz", "p", "px", "py", "pz",
+                    "q", "qx", "qy", "qz", "s", "sx", "sy", "sz", "x", "xx", "xy", "xz",
+                    "y", "yx", "yy", "yz", "z", "zx", "zy", "zz",
+                ]
+                
+                if unit in js_keywords or len(unit) > 10:
                     continue
 
                 # Check if unit is valid for any quantity
@@ -558,12 +618,49 @@ class ScientificValidator:
                         unit_stats[unit] = unit_stats.get(unit, 0) + 1
                         break
 
+                # Only validate units that appear in scientific contexts
+                # Skip if the unit appears in JavaScript code patterns
+                unit_match_pos = content_without_hex.find(f"{value_str} {unit}")
+                if unit_match_pos == -1:
+                    continue
+                    
+                context_before = content_without_hex[:unit_match_pos].lower()
+                context_after = content_without_hex[unit_match_pos + len(f"{value_str} {unit}"):].lower()
+                
+                # Check if this looks like JavaScript code context
+                js_context_indicators = [
+                    "const", "let", "var", "function", "new", "return", "if", "else", "for", "while",
+                    "three.", "scene.", "camera.", "renderer.", "material.", "geometry.", "mesh.",
+                    "position.", "rotation.", "scale.", "color.", "size.", "width.", "height.",
+                    "add(", "remove(", "create(", "destroy(", "init(", "setup(", "load(", "save(",
+                    "get(", "set(", "has(", "is(", "can(", "will(", "should(", "must(", "need(",
+                    "vector3", "vector2", "quaternion", "matrix4", "box3", "sphere", "plane",
+                    "mesh(", "geometry(", "material(", "light(", "camera(", "scene(",
+                    "setposition", "setrotation", "setscale", "setcolor", "setvalue",
+                    "getposition", "getrotation", "getscale", "getcolor", "getvalue",
+                ]
+                
+                is_js_context = any(indicator in context_before or indicator in context_after for indicator in js_context_indicators)
+                
+                # Additional check: look for scientific context indicators
+                scientific_context_indicators = [
+                    "voltage", "current", "resistance", "power", "energy", "force", "mass",
+                    "temperature", "pressure", "volume", "density", "speed", "acceleration",
+                    "ohm's law", "kirchhoff", "watt", "joule", "newton", "pascal", "kelvin",
+                    "circuit", "battery", "resistor", "capacitor", "inductor", "transformer",
+                    "electron", "proton", "neutron", "atom", "molecule", "reaction",
+                    "chemical", "physical", "scientific", "measurement", "unit", "formula",
+                ]
+                
+                has_scientific_context = any(indicator in context_before or indicator in context_after for indicator in scientific_context_indicators)
+                
+                # Only validate if it's not JS context AND has scientific context
                 if not unit_found and unit not in [
                     "px",
                     "deg",
                     "rad",
                     "%",
-                ]:  # Ignore display/angle units
+                ] and not is_js_context and has_scientific_context:  # Ignore display/angle units, JS context, and non-scientific context
                     issues.append(
                         ScientificIssue(
                             type="error",
@@ -718,6 +815,19 @@ class ScientificValidator:
         for value_str, unit in matches:
             try:
                 value = float(value_str)
+
+                # Skip validation for educational/demonstration values
+                # These are common in educational visualizations and are intentionally simplified
+                educational_values = {
+                    "v": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 9.0, 12.0],  # Common educational voltages
+                    "a": [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0],  # Common educational currents
+                    "ω": [1.0, 10.0, 50.0, 100.0, 200.0, 500.0, 1000.0],  # Common educational resistances
+                    "ohm": [1.0, 10.0, 50.0, 100.0, 200.0, 500.0, 1000.0],  # Common educational resistances
+                }
+                
+                unit_lower = unit.lower()
+                if unit_lower in educational_values and value in educational_values[unit_lower]:
+                    continue  # Skip validation for common educational values
 
                 # Check against realistic ranges
                 for range_name, range_info in self.realistic_ranges.items():

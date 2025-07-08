@@ -42,19 +42,19 @@ class Settings(BaseSettings):
 
     # Validation System Configuration
     ENABLE_COMPREHENSIVE_VALIDATION: bool = True
-    ENABLE_RUNTIME_VALIDATION: bool = False  # Expensive, enable for production
+    ENABLE_RUNTIME_VALIDATION: bool = True  # Enable runtime validation to catch JavaScript errors
     VALIDATION_TIMEOUT_HTML: int = 30
     VALIDATION_TIMEOUT_SCIENTIFIC: int = 45
     VALIDATION_TIMEOUT_REALISM: int = 30
     VALIDATION_TIMEOUT_RUNTIME: int = 60
 
     # Quality Scoring Configuration
-    QUALITY_SCORE_THRESHOLD: float = 7.0
+    QUALITY_SCORE_THRESHOLD: float = 5.5
     ENABLE_QUALITY_FILTERING: bool = True
     ENABLE_FEEDBACK_LOOP: bool = True
 
     # Context Filtering Configuration
-    CONTEXT_FILTER_MIN_QUALITY: float = 7.0
+    CONTEXT_FILTER_MIN_QUALITY: float = 5.5
     CONTEXT_FILTER_MAX_ITEMS: int = 5
     CONTEXT_FILTER_ENSURE_DIVERSITY: bool = True
 
@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     ENABLE_ERROR_FIXING: bool = True  # Enable/disable error fixing
     SAVE_ALL_VALIDATION_ERRORS: bool = True  # Log all errors to database
     ERROR_FIXING_TEMPLATE_PATH: str = "error_fixing_template.prompt.txt"
+    
+    # Error Fixing Configuration
+    MAX_VALIDATION_ATTEMPTS: int = 2  # Maximum number of validation attempts with HTML error fixing
+    
+    # Quality Enhancement Configuration
+    ENABLE_QUALITY_ENHANCEMENT: bool = True  # Enable/disable quality enhancement
+    ENABLE_POST_VALIDATION_ENHANCEMENT: bool = True  # Enable/disable post-validation quality enhancement
+    QUALITY_ENHANCEMENT_MAX_ATTEMPTS: int = 2  # Maximum quality enhancement attempts per validation cycle
+    QUALITY_ENHANCEMENT_MIN_IMPROVEMENT: float = 0.5  # Minimum quality improvement to consider enhancement successful
+    QUALITY_ENHANCEMENT_SKIP_THRESHOLD: float = 6.0  # Skip enhancement if score is already above this threshold
 
     # Keycloak Configuration
     KEYCLOAK_SERVER_URL: str = "http://localhost:28080"

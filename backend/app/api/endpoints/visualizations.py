@@ -624,6 +624,7 @@ async def generate_visualization(
                             education_level=prompt_entry["education_level"],
                             learning_objectives=prompt_entry["learning_objectives"],
                             interactive_features=prompt_entry["interactive_features"],
+                            user_id=current_user.id,
                         )
 
                     # Save validation errors to database
@@ -788,6 +789,7 @@ async def generate_visualization(
                 education_level=prompt_entry["education_level"],
                 learning_objectives=prompt_entry["learning_objectives"],
                 interactive_features=prompt_entry["interactive_features"],
+                user_id=current_user.id,
             )
         # Calculate generation time
         generation_time = time.time() - start_time
@@ -795,9 +797,10 @@ async def generate_visualization(
         history_entry = {
             "id": str(datetime.datetime.now().timestamp()),
             "prompt_id": prompt.id,
+            "user_id": current_user.id,  # Add user_id to history entry
             "user_query": request.topic,
             "response": html_content,
-            "provider": request.provider,
+            "provider_id": None,  # TODO: Map provider string to provider_id
             "components": json.dumps(
                 [comp.model_dump() for comp in request.config.components]
             )
