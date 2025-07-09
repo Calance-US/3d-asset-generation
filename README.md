@@ -23,10 +23,13 @@ Before running `make up`, ensure you have the following installed:
 - **Node.js** (v18+ recommended, for frontend)
 - **uv** (Python package manager, [install guide](https://docs.astral.sh/uv/getting-started/installation/))
 - **GNU Make** (standard on Linux/macOS)
-- **.env file**: Copy the example env file and edit as needed:
+- **.env file**: Copy the example env files and edit as needed:
   ```bash
   cp backend/.env.example backend/.env
   # Edit backend/.env and set your secrets
+
+  cp frontend/.env.example frontend/.env
+  # Edit frontend/.env and set your secrets
   ```
 
 > **Note:** No need to install Postgres, Qdrant, or Keycloak manually—these are managed by Docker Compose.
