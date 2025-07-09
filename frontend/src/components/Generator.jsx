@@ -65,6 +65,16 @@ export default function Generator() {
   const [validationResult, setValidationResult] = useState(null);
   const [isValidating, setIsValidating] = useState(false);
 
+  // --- Chat state for post-generation fixing ---
+  const [chatSessionId, setChatSessionId] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState("");
+
+  // Track the current history entry ID for chat/fix
+  const [historyEntryId, setHistoryEntryId] = useState(null);
+
   // Load history on component mount
   useEffect(() => {
     loadHistory();
@@ -433,6 +443,11 @@ export default function Generator() {
 
       setLoading(false);
       setError(null);
+
+      // When a user selects a visualization from history, set historyEntryId
+      setHistoryEntryId(entry.id);
+      setChatSessionId(null);      // Optionally reset chat session for new entry
+      setChatMessages([]);         // Optionally reset chat messages
     } catch (err) {
       setError(`Error loading history entry: ${err.message}`);
       setLoading(false);
@@ -681,6 +696,103 @@ export default function Generator() {
       setLoading(false);
     }
   }
+
+  /**
+   * Send a chat message to fix the current visualization HTML.
+   * If no chat session exists, creates one via /chat/fix. Otherwise, uses /chat/message.
+   * Updates the visualization and chat history on success.
+   */
+  const handleChatSend = async () => {
+    if (!chatInput.trim()) return;
+    setChatLoading(true);
+    setChatError("");
+    try {
+      let response;
+      if (!chatSessionId) {
+        // Use the correct history_entry_id
+        response = await fetch(`${BASE_URL}/chat/fix`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            history_entry_id: historyEntryId, // <-- Use this, not taskId
+            user_message: chatInput,
+            provider: provider,
+          }),
+        });
+      } else {
+        // Subsequent messages: continue chat
+        response = await fetch(`${BASE_URL}/chat/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_session_id: chatSessionId,
+            user_message: chatInput,
+            provider: provider,
+          }),
+        });
+      }
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Chat API error");
+      }
+      const data = await response.json();
+      // Update chat session and messages
+      if (data.chat_session_id) setChatSessionId(data.chat_session_id);
+      if (data.updated_html) setHtml(data.updated_html);
+      if (data.updated_history_entry) setTaskId(data.updated_history_entry);
+      // Append user and assistant messages
+      setChatMessages((prev) => [
+        ...prev,
+        { role: "user", content: chatInput },
+        { role: "assistant", content: data.assistant_message || "(No response)" },
+      ]);
+      setChatInput("");
+    } catch (err) {
+      setChatError(err.message || "Unknown error");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  /**
+   * Render the chat interface below the visualization.
+   */
+  const renderChatBox = () => (
+    <div className="mt-8 max-w-2xl mx-auto bg-white rounded-lg shadow p-4">
+      <h3 className="text-lg font-semibold mb-2">💬 Improve this Visualization</h3>
+      <div className="h-48 overflow-y-auto border rounded mb-2 p-2 bg-gray-50">
+        {chatMessages.length === 0 && (
+          <div className="text-gray-400 italic">No messages yet. Suggest a fix or improvement!</div>
+        )}
+        {chatMessages.map((msg, idx) => (
+          <div key={idx} className={`mb-2 ${msg.role === "user" ? "text-right" : "text-left"}`}>
+            <span className={`inline-block px-2 py-1 rounded ${msg.role === "user" ? "bg-blue-100 text-black" : "bg-gray-200 text-black"}`}>
+              <b>{msg.role === "user" ? "You" : "Assistant"}:</b> {msg.content}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          className="flex-1 border rounded px-2 py-1 text-black"
+          placeholder="Suggest a fix or improvement..."
+          value={chatInput}
+          onChange={e => setChatInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") handleChatSend(); }}
+          disabled={chatLoading}
+        />
+        <button
+          className="bg-blue-600 text-white px-4 py-1 rounded disabled:opacity-50"
+          onClick={handleChatSend}
+          disabled={chatLoading || !chatInput.trim()}
+        >
+          {chatLoading ? "..." : "Send"}
+        </button>
+      </div>
+      {chatError && <div className="text-red-500 mt-2">{chatError}</div>}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -1499,6 +1611,9 @@ export default function Generator() {
                       title="3D Visualization"
                     />
                   </div>
+
+                  {/* Render chat box below visualization */}
+                  {renderChatBox()}
 
                   {/* Validation Status */}
                   <ValidationStatus

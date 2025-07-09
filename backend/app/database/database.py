@@ -7,7 +7,6 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.database.db_config import SessionLocal
-from app.models import HistoryEntry, Prompt, Tag, prompt_tags
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,14 +43,17 @@ def get_db():
 
 # History operations
 def get_all_history(db):
+    from app.models import HistoryEntry
     return db.query(HistoryEntry).order_by(HistoryEntry.created_at.desc()).all()
 
 
 def get_history_entry_by_id(db, entry_id: str):
+    from app.models import HistoryEntry
     return db.query(HistoryEntry).filter(HistoryEntry.id == entry_id).first()
 
 
 def create_history_entry(db, entry: dict):
+    from app.models import HistoryEntry
     db_entry = HistoryEntry(**entry)
     db.add(db_entry)
     db.commit()
@@ -60,6 +62,7 @@ def create_history_entry(db, entry: dict):
 
 
 def remove_history_entry(db, entry_id: str):
+    from app.models import HistoryEntry
     db.query(HistoryEntry).filter(HistoryEntry.id == entry_id).delete()
     db.commit()
 
@@ -72,6 +75,8 @@ def get_prompts(
     tag: Optional[str] = None,
     search: Optional[str] = None,
 ):
+    from app.models import Prompt, Tag, prompt_tags
+    
     query = db.query(Prompt)
 
     if subject:
@@ -103,8 +108,9 @@ def create_prompt(
     interactive_features: Optional[str] = None,
     tags: Optional[str] = None,
     user_id: Optional[int] = None,
-) -> Prompt:
+):
     """Create a new prompt in the database."""
+    from app.models import Prompt, Tag
     # Log the values being saved
     logger.info(
         "Saving prompt with values:",
@@ -176,7 +182,7 @@ def create_prompt(
     return prompt
 
 
-def update_prompt(db: Session, prompt_id: int, update_data: dict) -> Optional[Prompt]:
+def update_prompt(db: Session, prompt_id: int, update_data: dict):
     """
     Update a prompt in the database.
 
@@ -188,6 +194,8 @@ def update_prompt(db: Session, prompt_id: int, update_data: dict) -> Optional[Pr
     Returns:
         Updated Prompt object or None if not found
     """
+    from app.models import Prompt, Tag
+    
     try:
         # Get the prompt
         prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
@@ -245,6 +253,8 @@ def delete_prompt(db: Session, prompt_id: int) -> bool:
     Returns:
         bool: True if successful, False otherwise
     """
+    from app.models import Prompt
+    
     try:
         prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
         if not prompt:
@@ -263,8 +273,10 @@ def delete_prompt(db: Session, prompt_id: int) -> bool:
         return False
 
 
-def duplicate_prompt(db, prompt_id: int) -> Optional[Prompt]:
+def duplicate_prompt(db, prompt_id: int):
     """Duplicate a prompt with all its tags."""
+    from app.models import Prompt
+    
     try:
         original = db.query(Prompt).filter(Prompt.id == prompt_id).first()
         if not original:
@@ -294,6 +306,8 @@ def duplicate_prompt(db, prompt_id: int) -> Optional[Prompt]:
 
 def batch_delete_prompts(db, prompt_ids: List[int]) -> bool:
     """Delete multiple prompts by their IDs."""
+    from app.models import Prompt
+    
     try:
         db.query(Prompt).filter(Prompt.id.in_(prompt_ids)).delete(
             synchronize_session=False
@@ -308,6 +322,8 @@ def batch_delete_prompts(db, prompt_ids: List[int]) -> bool:
 
 def export_prompts(db) -> List[Dict]:
     """Export all prompts with their tags."""
+    from app.models import Prompt
+    
     prompts = db.query(Prompt).all()
     return [
         {
@@ -374,6 +390,8 @@ def import_prompts(db, prompts_data: List[Dict]) -> bool:
 
 # Migration function to move data from JSON files to SQLite
 def migrate_from_json():
+    from app.models import HistoryEntry, Prompt
+    
     db = SessionLocal()
     try:
         # Clear existing data before migration
@@ -419,8 +437,10 @@ def migrate_from_json():
         db.close()
 
 
-def get_prompt_by_id(self, prompt_id: int) -> Optional[Prompt]:
+def get_prompt_by_id(self, prompt_id: int):
     """Get a prompt by its ID."""
+    from app.models import Prompt
+    
     try:
         return self.session.query(Prompt).filter(Prompt.id == prompt_id).first()
     except Exception as e:
@@ -435,8 +455,10 @@ def get_prompt_by_id(self, prompt_id: int) -> Optional[Prompt]:
         return None
 
 
-def get_prompt_by_name(self, name: str) -> Optional[Prompt]:
+def get_prompt_by_name(self, name: str):
     """Get a prompt by its name."""
+    from app.models import Prompt
+    
     try:
         return self.session.query(Prompt).filter(Prompt.name == name).first()
     except Exception as e:
@@ -448,7 +470,9 @@ def get_prompt_by_name(self, name: str) -> Optional[Prompt]:
 
 
 def prompt_exists(self, name: str) -> bool:
-    """Check if a prompt with the given name exists."""
+    """Check if a prompt by its name."""
+    from app.models import Prompt
+    
     try:
         return bool(self.session.query(Prompt).filter(Prompt.name == name).first())
     except Exception as e:

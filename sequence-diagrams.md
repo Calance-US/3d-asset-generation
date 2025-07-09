@@ -128,6 +128,104 @@ sequenceDiagram
     end
 ```
 
+## Full Visualization Generation Flow (Async with Enhancement, Validation & Polling)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Frontend
+    participant Backend
+    participant LLM
+    participant Validator
+    participant Database
+    participant ThreeJS
+
+    User->>Frontend: Enter prompt & subject
+    User->>Frontend: (Optional) Click Enhance
+    alt Enhancement Requested
+        Frontend->>Backend: POST /enhance-prompt
+        Backend->>LLM: Generate enhanced config
+        LLM-->>Backend: Return enhanced config (JSON)
+        Backend-->>Frontend: Return enhanced config
+        Frontend-->>User: Display enhanced config
+        User->>Frontend: Review/adjust config
+    end
+    User->>Frontend: Click Generate
+    Frontend->>Backend: POST /async-visualizations/generate-async
+    Backend-->>Frontend: Return { task_id }
+    loop Poll for Status
+        Frontend->>Backend: GET /async-visualizations/status/{task_id}
+        Backend-->>Frontend: Return status, progress, current_stage
+        alt Status = completed
+            Frontend->>Backend: GET /async-visualizations/result/{task_id}
+            Backend->>LLM: (If needed) Generate visualization HTML
+            LLM-->>Backend: Return HTML with Three.js code
+            Backend->>Validator: Validate HTML (syntax, scientific, realism, runtime)
+            Validator-->>Backend: Return validation results
+            alt Validation Success
+                Backend->>Database: Save history entry
+                Database-->>Backend: Confirm save
+                Backend-->>Frontend: Return HTML & validation results
+                Frontend->>ThreeJS: Initialize visualization
+                ThreeJS-->>Frontend: Render 3D scene
+                Frontend-->>User: Display visualization
+            else Validation Error
+                Backend-->>Frontend: Return HTML & validation errors
+                Frontend-->>User: Display errors, allow fix/regenerate
+            end
+        else Status = failed
+            Backend-->>Frontend: Return error details
+            Frontend-->>User: Display error message
+        else Status = running
+            Note over Frontend: Continue polling
+        end
+    end
+```
+
+## Chat-Based Iterative Fixing Flow (Chat Session)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Frontend
+    participant Backend
+    participant LLM
+    participant Validator
+    participant Database
+    participant ThreeJS
+
+    User->>Frontend: Load visualization (from history)
+    Frontend-->>User: Display visualization & chat button
+    User->>Frontend: Open chat, send feedback ("Make background darker")
+    Frontend->>Backend: POST /chat/fix (history_entry_id, user_message)
+    Backend->>Database: Get current HTML from history
+    Backend->>LLM: Generate HTML fix (with user feedback & chat context)
+    LLM-->>Backend: Return updated HTML
+    Backend->>Validator: Validate updated HTML
+    Validator-->>Backend: Return validation results
+    Backend->>Database: Update history entry (overwrite HTML)
+    Database-->>Backend: Confirm update
+    Backend-->>Frontend: Return updated HTML, validation results, chat message
+    Frontend-->>ThreeJS: Re-render visualization
+    ThreeJS-->>Frontend: Render updated 3D scene
+    Frontend-->>User: Display updated visualization & chat
+    loop Further Iterations
+        User->>Frontend: Send new chat message ("Add more lighting")
+        Frontend->>Backend: POST /chat/message (chat_session_id, message)
+        Backend->>Database: Get latest HTML
+        Backend->>LLM: Generate new HTML fix
+        LLM-->>Backend: Return updated HTML
+        Backend->>Validator: Validate updated HTML
+        Validator-->>Backend: Return validation results
+        Backend->>Database: Update history entry
+        Database-->>Backend: Confirm update
+        Backend-->>Frontend: Return updated HTML, validation, chat message
+        Frontend-->>ThreeJS: Re-render visualization
+        ThreeJS-->>Frontend: Render updated 3D scene
+        Frontend-->>User: Display updated visualization & chat
+    end
+```
+
 ## Notes
 
 1. **Renderer Configuration**

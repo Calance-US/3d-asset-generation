@@ -1,10 +1,11 @@
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from jinja2 import Environment, FileSystemLoader
 
 from app.config.logging_config import logger
+from app.config.settings import get_settings
 
 
 class PromptGenerator:
@@ -359,3 +360,140 @@ class PromptGenerator:
                 },
             )
             raise
+
+    def inject_local_models_into_prompt(
+        self,
+        topic: str,
+        subject: str,
+        components: List[dict],
+        base_prompt: str
+    ) -> str:
+        """Inject relevant local model references into the generation prompt."""
+        
+        settings = get_settings()
+        if not settings.ENABLE_MODEL_SEARCH:
+            return base_prompt
+        
+        # Ensure components is a list of dicts
+        if components and not isinstance(components[0], dict):
+            try:
+                components = [
+                    c.model_dump() if hasattr(c, 'model_dump') else
+                    c.dict() if hasattr(c, 'dict') else
+                    vars(c) for c in components
+                ]
+            except Exception as e:
+                logger.warning(f"Failed to convert components to dicts: {e}")
+                components = [vars(c) for c in components]
+        
+        try:
+            from ..database.database import get_db
+            from ..services.local_model_service import LocalModelService
+            
+            db = next(get_db())
+            service = LocalModelService(db)
+            
+            # Find relevant models using multiple search strategies
+            relevant_models = []
+            
+            # Strategy 1: Search by topic and subject
+            topic_models = service.get_models_for_visualization(
+                topic=topic,
+                subject=subject,
+                components=components
+            )
+            relevant_models.extend(topic_models)
+            
+            # Strategy 2: Search by individual components
+            for component in components:
+                component_name = component.get("component_name", "")
+                component_desc = component.get("component_description", "")
+                if component_name or component_desc:
+                    component_models = service.search_models(
+                        query=f"{component_name} {component_desc}",
+                        subject=subject,
+                        limit=3
+                    )
+                    relevant_models.extend(component_models)
+            
+            # Strategy 3: Search by subject for general models
+            subject_models = service.search_models(
+                query=subject,
+                subject=subject,
+                limit=2
+            )
+            relevant_models.extend(subject_models)
+            
+            # Remove duplicates and limit results
+            unique_models = list({model.id: model for model in relevant_models}.values())
+            unique_models = unique_models[:5]  # Limit to top 5 models
+            
+            # Debug log: which models are being injected
+            if unique_models:
+                logger.info(f"Injecting {len(unique_models)} local 3D models into prompt for topic: {topic}, subject: {subject}")
+                for model in unique_models:
+                    logger.debug(f"Injected model: id={model.id}, name={model.model_name}, subject={model.subject}, tags={model.tags}, url={model.get_api_url()}")
+            else:
+                logger.debug(f"No relevant models found for topic: {topic}, subject: {subject}")
+                return base_prompt
+            
+            # Create comprehensive model reference section
+            model_references = "\n\n## Available 3D Models for Your Visualization:\n"
+            model_references += "You have access to these pre-built 3D models that you can use in your visualization:\n\n"
+            
+            for i, model in enumerate(unique_models, 1):
+                model_references += f"### Model {i}: {model.model_name}\n"
+                model_references += f"- **Description**: {model.description or 'No description available'}\n"
+                model_references += f"- **Category**: {model.category or 'N/A'}\n"
+                model_references += f"- **Subject**: {model.subject or 'N/A'}\n"
+                if model.tags:
+                    model_references += f"- **Tags**: {', '.join(model.tags)}\n"
+                model_references += f"- **File Type**: {model.model_type.upper()}\n"
+                model_references += f"- **API URL**: `{model.get_api_url()}`\n\n"
+            
+            # Add usage instructions
+            model_references += "### How to Use These Models:\n"
+            model_references += "1. **Load the model**: Use the GLTFLoader to load the model from the API URL\n"
+            model_references += "2. **Make it the centerpiece**: Position the model prominently in your scene\n"
+            model_references += "3. **Scale appropriately**: Adjust the model's scale to fit your visualization\n"
+            model_references += "4. **Add interactions**: Create controls to rotate, zoom, or animate the model\n\n"
+            
+            model_references += "### Example Code:\n"
+            model_references += "```javascript\n"
+            model_references += "// Load a 3D model\n"
+            model_references += "const loader = new THREE.GLTFLoader();\n"
+            model_references += f"loader.load('{unique_models[0].get_api_url()}', (gltf) => {{\n"
+            model_references += "    const model = gltf.scene;\n"
+            model_references += "    // Position the model\n"
+            model_references += "    model.position.set(0, 0, 0);\n"
+            model_references += "    // Scale if needed\n"
+            model_references += "    model.scale.set(1, 1, 1);\n"
+            model_references += "    // Add to scene\n"
+            model_references += "    scene.add(model);\n"
+            model_references += "});\n"
+            model_references += "```\n\n"
+            
+            # Add integration instructions
+            model_references += "### Integration Guidelines:\n"
+            model_references += "- **PRIORITIZE these models**: Use these pre-built models as the PRIMARY 3D objects in your visualization\n"
+            model_references += "- **Minimize custom geometry**: Only create custom Three.js geometry for elements that complement the models\n"
+            model_references += "- **Focus on interactions**: Spend more time on animations, controls, and educational features rather than building complex geometry\n"
+            model_references += "- **Handle loading**: Always handle loading states and errors when loading models\n"
+            model_references += "- **Optimize performance**: Consider model complexity and use LOD (Level of Detail) if needed\n\n"
+            
+            # Inject into prompt
+            enhanced_prompt = base_prompt + model_references
+            enhanced_prompt += "\n\n**CRITICAL INSTRUCTION**: When creating your visualization, you MUST use these pre-built models as the main 3D objects. "
+            enhanced_prompt += "DO NOT create extensive custom geometry that duplicates what these models provide. "
+            enhanced_prompt += "Instead, focus on:\n"
+            enhanced_prompt += "1. Loading and displaying these models prominently\n"
+            enhanced_prompt += "2. Adding animations and interactions to the models\n"
+            enhanced_prompt += "3. Creating UI controls and educational features\n"
+            enhanced_prompt += "4. Adding only minimal custom geometry for effects, labels, or complementary elements\n\n"
+            enhanced_prompt += "**AVOID**: Creating large custom scenes that compete with or duplicate the provided 3D models.\n"
+            
+            return enhanced_prompt
+            
+        except Exception as e:
+            logger.warning(f"Failed to inject local models: {e}")
+            return base_prompt

@@ -4,6 +4,7 @@ from app.api.endpoints import (
     auth,
     gold_standards,
     history,
+    local_models,
     models,
     prompt,
     rag,
@@ -21,9 +22,12 @@ api_router.include_router(
     gold_standards.router, prefix="/gold-standards", tags=["gold-standards"]
 )
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+# Register chat endpoints from admin router under /chat as well
+api_router.include_router(admin.router, prefix="/chat", tags=["chat"])
 api_router.include_router(prompt.router, prefix="/prompt", tags=["prompt"])
 api_router.include_router(history.router, prefix="/history", tags=["history"])
 api_router.include_router(models.router, prefix="/models", tags=["models"])
+api_router.include_router(local_models.router, prefix="/local-models", tags=["local-models"])
 api_router.include_router(rag.router, prefix="/rag", tags=["rag"])
 api_router.include_router(
     async_visualizations.router,

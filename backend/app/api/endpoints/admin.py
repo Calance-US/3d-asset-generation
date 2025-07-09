@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from app.auth.dependencies import get_admin_user
+from app.auth.dependencies import get_admin_user, get_current_user
 from app.database.database import get_db
 from app.models import (
     AsyncTask,
@@ -13,17 +13,29 @@ from app.models import (
     User,
     ValidationError,
     Visualization,
+    ChatSession,
+    ChatMessage,
 )
 from app.services.error_fixing.validation_error_service import validation_error_service
 from app.services.rag import get_vector_store
 from app.services.validation.simple_orchestrator import SimpleValidationOrchestrator
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from app.schemas.schemas import ChatFixRequest, ChatFixResponse, ChatMessageRequest, ChatMessageResponse, ChatSessionSchema, ChatMessageSchema
+import uuid
+from app.utils.llm_utils import generate_with_provider
+from app.api.endpoints.async_visualizations import _extract_validation_errors
+from app.services.error_fixing.enhanced_error_fixing_service import enhanced_error_fixing_service
+from app.services.validation.validation_orchestrator import ValidationOrchestrator
 
 router = APIRouter()
 
 # Initialize validation system components for metrics
-validation_orchestrator = SimpleValidationOrchestrator()
+validation_orchestrator = ValidationOrchestrator()
+
+def validate_html(html):
+    # Simulate validation
+    return {"html_validation": {"errors": []}}
 
 
 @router.get("/vector-store-stats", response_model=Dict[str, Any])
@@ -802,3 +814,192 @@ async def get_task_stats_summary(db: Session = Depends(get_db)) -> Dict[str, Any
         raise HTTPException(
             status_code=500, detail="Failed to retrieve task statistics"
         )
+
+@router.post("/fix", response_model=ChatFixResponse)
+async def chat_fix(request: ChatFixRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Get or create chat session for this history entry and user
+    history_entry = db.query(HistoryEntry).filter_by(id=request.history_entry_id).first()
+    if not history_entry:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    # Compose prompt for LLM: include user message and current HTML, instruct to return ONLY HTML
+    prompt = (
+        f"User request: {request.user_message}\n"
+        f"Current HTML:\n{history_entry.response}\n"
+        "\n---\n"
+        "Return ONLY the corrected HTML. Do not include any markdown, explanation, or commentary."
+    )
+    # Call the real LLM
+    updated_html = await generate_with_provider(prompt, request.provider)
+    if not updated_html:
+        raise HTTPException(status_code=500, detail="LLM did not return any HTML.")
+
+    # Validate the updated HTML using the orchestrator
+    validation_result = await validation_orchestrator.validate_content(
+        html_content=updated_html,
+        title="3D Visualization",
+        subject=getattr(history_entry, "subject", "physics"),
+        education_level="high school"
+    )
+    real_errors = _extract_validation_errors(validation_result)
+
+    # If there are real errors, try to fix them using the enhanced error fixing service
+    if real_errors:
+        fixing_result = await enhanced_error_fixing_service.fix_html_errors(
+            updated_html, real_errors, request.provider, db=db, chat_session_id=None
+        )
+        if fixing_result.get("fixed_html"):
+            updated_html = fixing_result["fixed_html"]
+            # Optionally, re-validate (not strictly required for parity)
+            validation_result = await validation_orchestrator.validate_content(
+                html_content=updated_html,
+                title="3D Visualization",
+                subject=getattr(history_entry, "subject", "physics"),
+                education_level="high school"
+            )
+            real_errors = _extract_validation_errors(validation_result)
+
+    # Update the HistoryEntry with the best HTML
+    history_entry.response = updated_html
+    db.add(history_entry)
+    db.commit()
+    db.refresh(history_entry)
+
+    # Find or create a ChatSession for this user and history entry
+    session = db.query(ChatSession).filter_by(history_entry_id=history_entry.id, user_id=current_user.id, is_active=True).first()
+    if not session:
+        session = ChatSession(
+            id=str(uuid.uuid4()),
+            history_entry_id=history_entry.id,
+            user_id=current_user.id,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            is_active=True
+        )
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+
+    # Create user message
+    user_msg = ChatMessage(
+        id=str(uuid.uuid4()),
+        chat_session_id=session.id,
+        role="user",
+        content=request.user_message,
+        message_type="text",
+        timestamp=datetime.utcnow()
+    )
+    db.add(user_msg)
+    db.commit()
+    db.refresh(user_msg)
+
+    # Create assistant message
+    assistant_msg = ChatMessage(
+        id=str(uuid.uuid4()),
+        chat_session_id=session.id,
+        role="assistant",
+        content="Visualization updated. See new HTML.",
+        message_type="text",
+        timestamp=datetime.utcnow()
+    )
+    db.add(assistant_msg)
+    db.commit()
+    db.refresh(assistant_msg)
+
+    return ChatFixResponse(
+        success=True,
+        updated_html=updated_html,
+        assistant_message="Visualization updated. See new HTML.",
+        chat_session_id=session.id,
+        message_id=assistant_msg.id,
+        updated_history_entry_id=history_entry.id,
+        validation_results=validation_result,
+        error=None,
+    )
+
+@router.post("/message", response_model=ChatMessageResponse)
+async def chat_message(request: ChatMessageRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Get chat session and history entry
+    session = db.query(ChatSession).filter_by(id=request.chat_session_id, user_id=current_user.id, is_active=True).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    history_entry = db.query(HistoryEntry).filter_by(id=session.history_entry_id).first()
+    if not history_entry:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    # Compose prompt for LLM: include user message and current HTML, instruct to return ONLY HTML
+    prompt = (
+        f"User request: {request.user_message}\n"
+        f"Current HTML:\n{history_entry.response}\n"
+        "\n---\n"
+        "Return ONLY the corrected HTML. Do not include any markdown, explanation, or commentary."
+    )
+    # Call the real LLM
+    updated_html = await generate_with_provider(prompt, request.provider)
+    if not updated_html:
+        raise HTTPException(status_code=500, detail="LLM did not return any HTML.")
+
+    # Update the HistoryEntry with the new HTML
+    history_entry.response = updated_html
+    db.add(history_entry)
+    db.commit()
+    db.refresh(history_entry)
+
+    # Add user message
+    user_msg = ChatMessage(
+        id=str(uuid.uuid4()),
+        chat_session_id=session.id,
+        role="user",
+        content=request.user_message,
+        message_type="text",
+        timestamp=datetime.utcnow()
+    )
+    db.add(user_msg)
+    db.commit()
+    db.refresh(user_msg)
+
+    # Add assistant message
+    assistant_msg = ChatMessage(
+        id=str(uuid.uuid4()),
+        chat_session_id=session.id,
+        role="assistant",
+        content="Visualization updated. See new HTML.",
+        message_type="text",
+        timestamp=datetime.utcnow()
+    )
+    db.add(assistant_msg)
+    db.commit()
+    db.refresh(assistant_msg)
+
+    return ChatMessageResponse(
+        success=True,
+        updated_html=updated_html,
+        assistant_message="Visualization updated. See new HTML.",
+        chat_session_id=session.id,
+        message_id=assistant_msg.id,
+        updated_history_entry_id=history_entry.id,
+        validation_results={},
+        error=None,
+    )
+
+@router.get("/session/{session_id}", response_model=ChatSessionSchema)
+async def get_chat_session(session_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    session = db.query(ChatSession).filter_by(id=session_id, user_id=current_user.id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    messages = db.query(ChatMessage).filter_by(chat_session_id=session.id).order_by(ChatMessage.timestamp).all()
+    return ChatSessionSchema(
+        id=session.id,
+        history_entry_id=session.history_entry_id,
+        user_id=session.user_id,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+        is_active=session.is_active,
+        messages=[ChatMessageSchema(
+            id=m.id,
+            role=m.role,
+            content=m.content,
+            timestamp=m.timestamp,
+            message_type=m.message_type
+        ) for m in messages]
+    )

@@ -90,6 +90,20 @@ class Settings(BaseSettings):
     AUTH_ENABLED: bool = True
     AUTH_BYPASS_DEVELOPMENT: bool = True  # Allow bypassing auth in dev mode
 
+    # 3D Model Storage Settings
+    MODEL_STORAGE_BASE_DIR: str = "../models"
+    MODEL_API_BASE_URL: str = "http://localhost:8000"  # Base URL for model API endpoints
+    MODEL_CATEGORIES: list = [
+        "electronics", "biology", "chemistry", "physics", "mathematics",
+        "geography", "astronomy", "engineering", "architecture", "art"
+    ]
+    MODEL_SUBJECTS: list = [
+        "physics", "chemistry", "biology", "mathematics", "geography",
+        "astronomy", "engineering", "computer_science", "art", "history"
+    ]
+    ENABLE_MODEL_SEARCH: bool = True
+    MODEL_SEARCH_SIMILARITY_THRESHOLD: float = 0.5
+
     # Gold Standards Analysis Prompt
     GOLD_STANDARD_ANALYSIS_PROMPT: str = """
     Given the following HTML visualization, analyze it and generate a configuration that matches this JSON schema:

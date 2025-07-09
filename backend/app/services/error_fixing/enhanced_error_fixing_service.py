@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader
 
 from app.config.settings import settings
+from app.models import ChatSession, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -663,7 +664,7 @@ Be extremely careful and systematic. Test each fix mentally before proceeding.
         )
 
     async def fix_html_errors(
-        self, html_content: str, validation_errors: list, provider: str = "openai"
+        self, html_content: str, validation_errors: list, provider: str = "openai", db=None, chat_session_id: str = None
     ) -> dict:
         """
         Fix HTML errors using the enhanced error fixing system.
@@ -672,6 +673,8 @@ Be extremely careful and systematic. Test each fix mentally before proceeding.
             html_content: The HTML content to fix
             validation_errors: List of validation errors
             provider: LLM provider to use for fixing
+            db: Optional SQLAlchemy session for chat context
+            chat_session_id: Optional chat session ID for context
 
         Returns:
             Dict containing fixed HTML and metadata
@@ -686,10 +689,22 @@ Be extremely careful and systematic. Test each fix mentally before proceeding.
                 target_quality_improvement=2.0,
             )
 
+            # --- Chat session context logic ---
+            messages = None
+            if db is not None and chat_session_id:
+                chat_session = db.query(ChatSession).filter_by(id=chat_session_id).first()
+                if chat_session:
+                    chat_messages = db.query(ChatMessage).filter_by(chat_session_id=chat_session.id).order_by(ChatMessage.timestamp).all()
+                    messages = []
+                    for msg in chat_messages:
+                        messages.append({"role": msg.role, "content": msg.content})
+                    # Add the new user message for this fix attempt
+                    messages.append({"role": "user", "content": fixing_prompt})
+            # --- End chat session context logic ---
+
             # Call the LLM to fix the HTML
             from app.utils.llm_utils import generate_with_provider
-            
-            fixed_html = await generate_with_provider(fixing_prompt, provider)
+            fixed_html = await generate_with_provider(fixing_prompt, provider, messages=messages)
             
             if not fixed_html:
                 logger.warning("LLM returned empty response for HTML fixing")

@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from app.auth.dependencies import get_current_user
 from app.config.settings import settings
 from app.database.database import create_history_entry, create_prompt, get_db
-from app.models import AsyncTask, AsyncTaskStage, User
+from app.models import AsyncTask, AsyncTaskStage, User, ChatSession, ChatMessage
 from app.schemas.schemas import GenerateRequest
 from app.services.error_fixing.enhanced_error_fixing_service import (
     enhanced_error_fixing_service,
@@ -729,18 +729,48 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
             if request.config:
                 # Convert PromptConfig to dict for generate_prompt
                 config_dict = request.config.model_dump()
-                prompt_content = prompt_generator.generate_prompt(config_dict)
+                base_prompt = prompt_generator.generate_prompt(config_dict)
+                # Extract components for local model search
+                components = []
+                if hasattr(request.config, 'components') and request.config.components:
+                    components = request.config.components
+                # Inject local models into the prompt
+                prompt_content = prompt_generator.inject_local_models_into_prompt(
+                    topic=request.topic,
+                    subject=request.subject or "physics",
+                    components=components,
+                    base_prompt=base_prompt
+                )
             else:
                 # Use the generate_from_topic method for simple cases
-                prompt_content = prompt_generator.generate_from_topic(
+                base_prompt = prompt_generator.generate_from_topic(
                     topic=request.topic,
                     subject=request.subject or "physics",
                     education_level="High School",
+                )
+                # Inject local models into the prompt
+                prompt_content = prompt_generator.inject_local_models_into_prompt(
+                    topic=request.topic,
+                    subject=request.subject or "physics",
+                    components=[],
+                    base_prompt=base_prompt
                 )
 
             # Combine context and prompt
             if context_text:
                 prompt_content = f"{context_text}\n\n---\n\n{prompt_content}"
+
+            # --- Inject chat session context if provided ---
+            if getattr(request, 'chat_session_id', None):
+                chat_session = db.query(ChatSession).filter_by(id=request.chat_session_id).first()
+                if chat_session:
+                    chat_messages = db.query(ChatMessage).filter_by(chat_session_id=chat_session.id).order_by(ChatMessage.timestamp).all()
+                    chat_context = ""
+                    for msg in chat_messages:
+                        chat_context += f"{msg.role.upper()}: {msg.content}\n"
+                    # Prepend chat context to the prompt
+                    prompt_content = f"Previous conversation:\n{chat_context}\n\n{prompt_content}"
+            # --- End chat session context injection ---
 
             complete_task_stage(
                 db,
@@ -827,6 +857,8 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                             current_html_content,
                             previous_errors,
                             request.provider,
+                            db=db,
+                            chat_session_id=getattr(request, 'chat_session_id', None)
                         )
                         
                         if fixing_result.get("success") and fixing_result.get("fixed_html"):
@@ -1023,7 +1055,9 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
 
                     # Attempt error fixing with real errors only
                     fixing_result = await enhanced_error_fixing_service.fix_html_errors(
-                        current_html_content, real_errors[:10], request.provider
+                        current_html_content, real_errors[:10], request.provider,
+                        db=db,
+                        chat_session_id=getattr(request, 'chat_session_id', None)
                     )
 
                     if fixing_result.get("fixed_html"):
@@ -1092,7 +1126,9 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                         current_quality_score=current_quality_score,
                         target_quality_score=settings.QUALITY_SCORE_THRESHOLD,
                         attempt_number=quality_enhancement_attempts,
-                        provider=request.provider
+                        provider=request.provider,
+                        db=db,
+                        chat_session_id=getattr(request, 'chat_session_id', None)
                     )
 
                     if enhancement_result.success and enhancement_result.quality_improvement > 0:
@@ -1260,7 +1296,9 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                         current_quality_score=best_quality_score,
                         target_quality_score=settings.QUALITY_SCORE_THRESHOLD,
                         attempt_number=1,  # First post-validation attempt
-                        provider=request.provider
+                        provider=request.provider,
+                        db=db,
+                        chat_session_id=getattr(request, 'chat_session_id', None)
                     )
 
                     if enhancement_result.success and enhancement_result.quality_improvement > 0:

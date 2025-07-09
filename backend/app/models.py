@@ -431,3 +431,89 @@ class AsyncTaskStage(Base):
     def is_finished(self) -> bool:
         """Check if stage is in a finished state."""
         return self.status in ["completed", "failed"]
+
+
+class Local3DModel(Base):
+    """SQLAlchemy model for locally stored 3D models."""
+    
+    __tablename__ = "local_3d_models"
+    
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    
+    # File information
+    model_name = Column(String(100), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)  # Absolute path to model file
+    file_size = Column(Integer, nullable=False)
+    file_hash = Column(String(64), nullable=False, unique=True)
+    
+    # Metadata for search
+    category = Column(String(50), nullable=True, index=True)
+    subject = Column(String(50), nullable=True, index=True)
+    tags = Column(JSON, nullable=True, default=list)
+    description = Column(Text, nullable=True)
+    
+    # Technical metadata
+    model_type = Column(String(20), nullable=False, default="gltf")
+    has_animations = Column(Boolean, default=False)
+    has_textures = Column(Boolean, default=False)
+    has_materials = Column(Boolean, default=False)
+    triangle_count = Column(Integer, nullable=True)
+    vertex_count = Column(Integer, nullable=True)
+    
+    # Usage tracking
+    usage_count = Column(Integer, default=0)
+    last_used_at = Column(DateTime, nullable=True)
+    
+    # Status
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<Local3DModel(id={self.id}, name='{self.model_name}', path='{self.file_path}')>"
+    
+    def get_api_url(self) -> str:
+        """Get the API URL to serve this model."""
+        from ..config.settings import get_settings
+        settings = get_settings()
+        return f"{settings.MODEL_API_BASE_URL}/api/v1/local-models/{self.id}/file"
+    
+    def get_relative_path(self) -> str:
+        """Get relative path for use in generated HTML."""
+        from ..config.settings import get_settings
+        settings = get_settings()
+        return f"{settings.MODEL_API_BASE_URL}/api/v1/local-models/{self.id}/file"
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(String(36), primary_key=True, index=True)
+    history_entry_id = Column(String, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    user = relationship("User")
+    messages = relationship("ChatMessage", back_populates="chat_session", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<ChatSession(id={self.id}, history_entry_id={self.history_entry_id}, user_id={self.user_id})>"
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(String(36), primary_key=True, index=True)
+    chat_session_id = Column(String(36), ForeignKey("chat_sessions.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)
+    content = Column(Text, nullable=False)
+    message_type = Column(String(20), default="text")
+    timestamp = Column(DateTime, default=datetime.utcnow)
+
+    chat_session = relationship("ChatSession", back_populates="messages")
+
+    def __repr__(self):
+        return f"<ChatMessage(id={self.id}, role={self.role}, type={self.message_type})>"

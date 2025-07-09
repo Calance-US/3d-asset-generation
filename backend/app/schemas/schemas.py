@@ -213,6 +213,7 @@ class GenerateRequest(BaseModel):
     modelType: Optional[str] = "generated"
     selectedModel: Optional[str] = None
     config: Optional[PromptConfig] = None  # Optional custom configuration
+    chat_session_id: Optional[str] = None  # <-- Added for chat context
 
 
 class UpdatePromptRequest(BaseModel):
@@ -469,3 +470,53 @@ class LogoutResponse(BaseModel):
 
     message: str
     logout_url: Optional[str] = None
+
+
+class ChatMessageSchema(BaseModel):
+    id: str
+    role: str
+    content: str
+    timestamp: datetime
+    message_type: str = "text"
+
+
+class ChatSessionSchema(BaseModel):
+    id: str
+    history_entry_id: str
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool
+    messages: List[ChatMessageSchema] = []
+
+
+class ChatFixRequest(BaseModel):
+    history_entry_id: str
+    user_message: str
+    provider: str = "ollama"
+
+
+class ChatFixResponse(BaseModel):
+    success: bool
+    updated_html: Optional[str] = None
+    assistant_message: Optional[str] = None
+    chat_session_id: Optional[str] = None
+    message_id: Optional[str] = None
+    updated_history_entry_id: Optional[str] = None
+    validation_results: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class ChatMessageRequest(BaseModel):
+    chat_session_id: str
+    message: str
+    provider: str = "ollama"
+
+
+class ChatMessageResponse(BaseModel):
+    success: bool
+    assistant_message: Optional[str] = None
+    updated_html: Optional[str] = None
+    message_id: Optional[str] = None
+    updated_history_entry_id: Optional[str] = None
+    error: Optional[str] = None
