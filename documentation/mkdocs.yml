@@ -6,7 +6,7 @@ site_url: https://your-domain.com
 # Repository
 repo_name: 3d-webapp
 repo_url: https://github.com/Calance-US/3d-asset-generation
-edit_uri: blob/feature/rodin-integration/docs/docs/
+edit_uri: blob/feature/rodin-integration/documentation/docs/
 
 # Theme configuration
 theme:
