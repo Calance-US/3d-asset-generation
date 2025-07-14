@@ -1,6 +1,6 @@
 # Makefile for unified local dev environment
 
-.PHONY: up down logs ps clean keycloak-setup backend frontend docs infra reset-db
+.PHONY: up down logs ps clean keycloak-setup backend frontend docs infra reset-db seed-keycloak-users
 
 up:
 	make infra
@@ -60,6 +60,10 @@ docs-build:
 docker-check:
 	@docker info > /dev/null 2>&1 || (echo "ERROR: Docker is not running. Please start Docker Desktop or the Docker daemon." && exit 1)
 
+seed-keycloak-users:
+	@echo "Seeding Keycloak test users into Postgres..."
+	./scripts/seed_keycloak_users.sh
+
 infra:
 	docker-compose up -d
 	@echo "External services started: Postgres, Keycloak, Qdrant, pgAdmin."
@@ -72,6 +76,7 @@ infra:
 	@echo "Keycloak setup completed."
 	@cd backend && (test -d .venv || uv venv .venv) && . .venv/bin/activate && uv pip install -r pyproject.toml && alembic upgrade head
 	@echo "Alembic migrations applied."
+	@make seed-keycloak-users
 
 reset-db:
 	@echo "WARNING: This will delete all Postgres data and recreate the databases!"

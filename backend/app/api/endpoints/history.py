@@ -34,48 +34,22 @@ async def get_history(
                     provider=entry.ai_provider.name if entry.ai_provider else "Unknown",
                     subject=entry.prompt.subject if entry.prompt else "Unknown",
                     html=entry.response or "",
-                    timestamp=entry.created_at.isoformat()
-                    if entry.created_at
-                    else datetime.datetime.now().isoformat(),
+                    timestamp=entry.created_at.isoformat() if entry.created_at else datetime.datetime.now().isoformat(),
                     config={
                         "topic_name": entry.prompt.topic if entry.prompt else "",
-                        "key_concepts": entry.prompt.key_concepts
-                        if entry.prompt
-                        else "",
-                        "education_level": entry.prompt.education_level
-                        if entry.prompt
-                        else "High School",
-                        "learning_objectives": entry.prompt.learning_objectives
-                        if entry.prompt
-                        else "",
-                        "interactive_features": entry.prompt.interactive_features
-                        if entry.prompt
-                        else "",
-                        "components": entry.components
-                        if isinstance(entry.components, list)
-                        else [],
-                        "materials": entry.materials
-                        if isinstance(entry.materials, list)
-                        else [],
-                        "lights": entry.lights
-                        if isinstance(entry.lights, list)
-                        else [],
-                        "render_settings": entry.render_settings
-                        if isinstance(entry.render_settings, dict)
-                        else {},
+                        "key_concepts": entry.prompt.key_concepts if entry.prompt else "",
+                        "education_level": entry.prompt.education_level if entry.prompt else "High School",
+                        "learning_objectives": entry.prompt.learning_objectives if entry.prompt else "",
+                        "interactive_features": entry.prompt.interactive_features if entry.prompt else "",
+                        "components": json.loads(entry.components) if entry.components else [],
+                        "materials": json.loads(entry.materials) if entry.materials else [],
+                        "lights": json.loads(entry.lights) if entry.lights else [],
+                        "render_settings": json.loads(entry.render_settings) if entry.render_settings else {},
                         "animation_speed": entry.animation_speed or 1.0,
-                        "intro_narration_texts": entry.intro_narration_texts
-                        if isinstance(entry.intro_narration_texts, list)
-                        else [],
-                        "supporting_narration_texts": entry.supporting_narration_texts
-                        if isinstance(entry.supporting_narration_texts, list)
-                        else [],
-                        "interactive_description": entry.prompt.interactive_features
-                        if entry.prompt
-                        else "",
-                        "scene_description": entry.scene_description
-                        if entry.scene_description
-                        else "",
+                        "intro_narration_texts": json.loads(entry.intro_narration_texts) if entry.intro_narration_texts else [],
+                        "supporting_narration_texts": json.loads(entry.supporting_narration_texts) if entry.supporting_narration_texts else [],
+                        "interactive_description": entry.prompt.interactive_features if entry.prompt else "",
+                        "scene_description": entry.scene_description if entry.scene_description else "",
                     },
                 )
                 for entry in history

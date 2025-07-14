@@ -1002,4 +1002,4 @@ async def get_chat_session(session_id: str, db: Session = Depends(get_db), curre
             timestamp=m.timestamp,
             message_type=m.message_type
         ) for m in messages]
-    )
+        )

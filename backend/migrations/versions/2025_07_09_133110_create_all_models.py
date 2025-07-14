@@ -220,6 +220,29 @@ def upgrade():
         sa.Column('message_type', sa.String(20), default='text'),
         sa.Column('timestamp', sa.DateTime()),
     )
+    op.create_table(
+        'history',
+        sa.Column('id', sa.String(), primary_key=True, index=True),
+        sa.Column('prompt_id', sa.Integer(), sa.ForeignKey('prompts.id')),
+        sa.Column('visualization_id', sa.Integer(), sa.ForeignKey('visualizations.id'), nullable=True),
+        sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=False),
+        sa.Column('user_query', sa.Text()),
+        sa.Column('response', sa.Text()),
+        sa.Column('provider_id', sa.Integer(), sa.ForeignKey('ai_providers.id'), nullable=True),
+        sa.Column('scene_description', sa.Text(), nullable=True),
+        sa.Column('components', sa.JSON(), nullable=True, default=list),
+        sa.Column('materials', sa.JSON(), nullable=True, default=list),
+        sa.Column('lights', sa.JSON(), nullable=True, default=list),
+        sa.Column('render_settings', sa.JSON(), nullable=True, default=dict),
+        sa.Column('intro_narration_texts', sa.JSON(), nullable=True, default=list),
+        sa.Column('supporting_narration_texts', sa.JSON(), nullable=True, default=list),
+        sa.Column('animation_speed', sa.Float(), nullable=True),
+        sa.Column('generation_time', sa.Float(), nullable=True),
+        sa.Column('visibility', sa.String(), nullable=False, default='private'),
+        sa.Column('created_at', sa.DateTime(), default=sa.func.now()),
+    )
+
+    # --- Data migration removed: user seeding should be done via a post-migration shell script ---
 
     # ### Association tables (moved after main tables) ###
     op.create_table(
@@ -272,6 +295,7 @@ def upgrade():
 def downgrade():
     op.drop_table('chat_messages')
     op.drop_table('chat_sessions')
+    op.drop_table('history')
     op.drop_table('local_3d_models')
     op.drop_table('async_task_stages')
     op.drop_table('async_tasks')

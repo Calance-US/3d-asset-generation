@@ -5,7 +5,7 @@ site_url: https://your-domain.com
 
 # Repository
 repo_name: 3d-webapp
-repo_url: https://github.com/your-org/3d-webapp
+repo_url: https://github.com/Calance-US/3d-asset-generation
 edit_uri: edit/main/docs/
 
 # Theme configuration
@@ -144,10 +144,10 @@ nav:
   - Home: index.md
   - System Overview: README.md
   - Core Flows:
-    - Enhance Prompt Flow: enhance-prompt-flow.md
-    - Generate Visualization Flow: generate-visualization-flow.md
-    - Show Retrieved Results Flow: show-retrieved-results-flow.md
-    - Add Gold Standards Flow: add-gold-standards-flow.md
+      - Enhance Prompt Flow: enhance-prompt-flow.md
+      - Generate Visualization Flow: generate-visualization-flow.md
+      - Show Retrieved Results Flow: show-retrieved-results-flow.md
+      - Add Gold Standards Flow: add-gold-standards-flow.md
 
 # Extra CSS and JS
 extra_css:
@@ -159,7 +159,7 @@ extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 # Copyright
-copyright: Copyright &copy; 2024 Development Team 
+copyright: Copyright &copy; 2024 Development Team
 
 # Output directory for built site
-site_dir: site 
+site_dir: site
