@@ -139,3 +139,6 @@ vector_store/
 
 # Data dump
 data_dump/
+
+# mkdocs
+site/

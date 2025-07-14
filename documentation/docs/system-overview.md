@@ -11,24 +11,24 @@ The 3D Educational Visualization Platform is a sophisticated system that combine
 ### Core Flows
 
 1. **[Enhance Prompt Flow](./enhance-prompt-flow.md)**
-   - Documents the process of enhancing basic user prompts with AI-generated educational content
-   - Shows how the system automatically generates detailed configurations
-   - Covers AI provider integration and response processing
+      - Documents the process of enhancing basic user prompts with AI-generated educational content
+      - Shows how the system automatically generates detailed configurations
+      - Covers AI provider integration and response processing
 
 2. **[Generate Visualization Flow](./generate-visualization-flow.md)**
-   - The core functionality for creating 3D visualizations
-   - Details the RAG (Retrieval-Augmented Generation) process
-   - Covers AI generation, validation, and database persistence
+      - The core functionality for creating 3D visualizations
+      - Details the RAG (Retrieval-Augmented Generation) process
+      - Covers AI generation, validation, and database persistence
 
 3. **[Show Retrieved Results Flow](./show-retrieved-results-flow.md)**
-   - Development/testing feature for debugging RAG functionality
-   - Shows how similar visualizations are retrieved and displayed
-   - Covers vector search and similarity scoring
+      - Development/testing feature for debugging RAG functionality
+      - Shows how similar visualizations are retrieved and displayed
+      - Covers vector search and similarity scoring
 
 4. **[Add Gold Standards Flow](./add-gold-standards-flow.md)**
-   - Administrative process for uploading high-quality educational content
-   - Details the snippet extraction and embedding generation process
-   - Covers AI enhancement and vector store integration
+      - Administrative process for uploading high-quality educational content
+      - Details the snippet extraction and embedding generation process
+      - Covers AI enhancement and vector store integration
 
 ## System Architecture
 
@@ -37,9 +37,9 @@ The 3D Educational Visualization Platform is a sophisticated system that combine
 - **Frontend**: React-based UI with Material-UI and Tailwind CSS
 - **Backend**: FastAPI with async/await support
 - **Vector Store**: Qdrant for similarity search
-- **Database**: SQLAlchemy with Alembic migrations
+- **Database**: PostgreSQL with Alembic migrations
 - **AI Providers**: OpenAI, Google Gemini, Ollama support
-- **Embedding Service**: Sentence Transformers for vector generation
+- **Embedding Service**: Sentence Transformers for embedding generation
 
 ### Technology Stack
 

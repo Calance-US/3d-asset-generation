@@ -1,12 +1,12 @@
 site_name: 3D Educational Visualization Platform
 site_description: Comprehensive documentation for the 3D Educational Visualization Platform with AI-powered generation and RAG
-site_author: Development Team
+site_author: CalanceDevelopment Team
 site_url: https://your-domain.com
 
 # Repository
 repo_name: 3d-webapp
 repo_url: https://github.com/Calance-US/3d-asset-generation
-edit_uri: edit/main/docs/
+edit_uri: blob/feature/rodin-integration/docs/docs/
 
 # Theme configuration
 theme:
@@ -142,24 +142,21 @@ plugins:
 # Navigation structure
 nav:
   - Home: index.md
-  - System Overview: README.md
+  - System Overview: system-overview.md
   - Core Flows:
       - Enhance Prompt Flow: enhance-prompt-flow.md
       - Generate Visualization Flow: generate-visualization-flow.md
       - Show Retrieved Results Flow: show-retrieved-results-flow.md
       - Add Gold Standards Flow: add-gold-standards-flow.md
 
-# Extra CSS and JS
-extra_css:
-  - stylesheets/extra.css
-
+# Remove missing asset references
+extra_css: []
 extra_javascript:
-  - javascripts/mathjax.js
   - https://polyfill.io/v3/polyfill.min.js?features=es6
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 # Copyright
-copyright: Copyright &copy; 2024 Development Team
+copyright: Copyright &copy; 2025 Calance Development Team
 
 # Output directory for built site
 site_dir: site

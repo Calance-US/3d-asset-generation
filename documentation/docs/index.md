@@ -4,11 +4,8 @@ Welcome to the 3D Educational Visualization Platform documentation. This index p
 
 ## 📋 Quick Start
 
-- **[README](./README.md)** - Comprehensive overview and system architecture
-- **[Enhance Prompt Flow](./enhance-prompt-flow.md)** - How AI enhances user prompts
-- **[Generate Visualization Flow](./generate-visualization-flow.md)** - Core 3D generation process
-- **[Show Retrieved Results Flow](./show-retrieved-results-flow.md)** - RAG debugging and testing
-- **[Add Gold Standards Flow](./add-gold-standards-flow.md)** - Educational content management
+- **[System Overview](./system-overview.md)** - Comprehensive overview and system architecture
+
 
 ## 🔄 Core Flows
 
@@ -16,19 +13,20 @@ Welcome to the 3D Educational Visualization Platform documentation. This index p
 **File**: `enhance-prompt-flow.md`  
 **Purpose**: AI-powered prompt enhancement with educational content  
 **Key Features**:
-- Automatic configuration generation
+- Automatic configuration generation (all config fields: components, materials, lights, narration, renderer, etc.)
 - Multi-AI provider support
 - Educational content injection
 - Structured response processing
 
 ### 2. Generate Visualization Flow
 **File**: `generate-visualization-flow.md`  
-**Purpose**: Core 3D visualization generation with RAG  
+**Purpose**: Core 3D visualization generation with async task management and RAG  
 **Key Features**:
+- Async task creation, polling, cancellation, and result retrieval
 - Retrieval-augmented generation
 - Vector similarity search
 - AI provider integration
-- Database persistence
+- Database persistence (full config structure)
 - HTML validation
 
 ### 3. Show Retrieved Results Flow
@@ -52,31 +50,34 @@ Welcome to the 3D Educational Visualization Platform documentation. This index p
 ## 🏗️ System Architecture
 
 ### Technology Stack
-- **Backend**: FastAPI, SQLAlchemy, Pydantic V2
+- **Backend**: FastAPI (async), SQLAlchemy, Pydantic V2
 - **Frontend**: React, Material-UI, Tailwind CSS
 - **Database**: PostgreSQL with vector extensions
 - **Vector Store**: Qdrant
 - **AI Providers**: OpenAI, Google Gemini, Ollama
 - **Package Manager**: uv (Astral)
+- **Authentication**: Keycloak (OIDC), system user fallback for dev/migrations
 
 ### Key Components
+- **Async Task Manager**: Handles async generation, polling, cancellation
 - **RAG Service**: Retrieval-augmented generation
 - **Vector Store**: Qdrant similarity search
 - **Embedding Service**: Sentence Transformers
 - **Prompt Generator**: AI prompt creation
 - **Admin Dashboard**: Content management
+- **System User/Seeding**: Automated DB seeding for system and test users
 
-## 📊 Sequence Diagrams
+## 📈 Sequence Diagrams
 
 All flows include detailed Mermaid sequence diagrams showing:
 
 - **Participant Interactions**: Clear actor definitions
 - **Data Flow**: Request/response formats
 - **Error Handling**: Error paths and recovery
-- **Async Operations**: Parallel processing
-- **External Dependencies**: AI providers, databases
+- **Async Operations**: Parallel processing, task polling
+- **External Dependencies**: AI providers, databases, Keycloak
 
-## 🔧 Development Tools
+## 🛠️ Development Tools
 
 ### Debugging Features
 - **RAG Testing**: Show retrieved results
@@ -92,10 +93,15 @@ All flows include detailed Mermaid sequence diagrams showing:
 
 ## 📚 API Reference
 
+<a href="http://localhost:8000/docs" target="_blank">🚀 <b>Swagger UI</b></a>
+
+
 ### Core Endpoints
 ```
 POST /prompt/enhance-prompt     - Enhance user prompts
-POST /visualizations/generate   - Generate 3D visualizations
+POST /async-visualizations/generate-async   - Generate 3D visualizations (async)
+GET  /async-visualizations/status/{task_id} - Poll task status
+GET  /async-visualizations/result/{task_id} - Get result HTML
 POST /rag/retrieve-similar      - Retrieve similar (dev)
 POST /gold-standards/upload     - Upload educational content
 ```
@@ -104,7 +110,7 @@ POST /gold-standards/upload     - Upload educational content
 ```
 GET  /visualizations/           - List visualizations
 POST /visualizations/save       - Save to library
-GET  /history/                  - View generation history
+GET  /history/                  - View generation history (full config)
 GET  /admin/stats               - System statistics
 ```
 
@@ -112,10 +118,11 @@ GET  /admin/stats               - System statistics
 
 ### Core Tables
 - **prompts**: Educational prompt storage
-- **history**: Generation history and results
+- **history**: Generation history and results (full config: components, materials, lights, narration, etc.)
 - **snippet_metadata**: Educational content snippets
 - **visualizations**: Saved visualization library
 - **gold_standard_upload_status**: Upload processing status
+- **users**: Keycloak and system users (seeded)
 
 ## ⚙️ Configuration
 
@@ -126,6 +133,8 @@ GOOGLE_API_KEY=your_google_key
 OLLAMA_BASE_URL=http://localhost:11434
 VECTOR_STORE_COLLECTION_NAME=educational_snippets
 SIMILAR_VIS_LIMIT=10
+AUTH_ENABLED=true
+AUTH_BYPASS_DEVELOPMENT=false
 ```
 
 ## 🚀 Getting Started
@@ -135,12 +144,12 @@ SIMILAR_VIS_LIMIT=10
 # Backend setup
 cd backend
 uv sync
-uv run python main.py
+uv run uvicorn main:app --reload
 
 # Frontend setup
 cd frontend
 npm install
-npm run dev
+npm start
 ```
 
 ### 2. Upload Gold Standards
@@ -152,7 +161,7 @@ npm run dev
 ### 3. Generate Visualizations
 1. Enter topic description
 2. Optionally enhance with AI
-3. Generate 3D visualization
+3. Generate 3D visualization (async)
 4. Interact with educational content
 
 ## 🔍 Troubleshooting
@@ -162,6 +171,7 @@ npm run dev
 - **RAG Not Working**: Verify embeddings and similarity search
 - **AI Provider Errors**: Check API keys and configuration
 - **Database Issues**: Verify migrations and connections
+- **System User Not Found**: Ensure DB seeding script ran after Keycloak setup
 
 ### Debug Tools
 - **Show Retrieved Results**: Test RAG functionality
@@ -169,7 +179,7 @@ npm run dev
 - **Admin Statistics**: System performance metrics
 - **Vector Store Dashboard**: Embedding management
 
-## 📈 Performance
+## 📊 Performance
 
 ### Optimization Strategies
 - Async AI processing
@@ -191,9 +201,9 @@ npm run dev
 - Secure file upload handling
 - API key management
 - Content validation
+- Keycloak authentication
 
 ### Future Enhancements
-- User authentication
 - Rate limiting
 - Advanced authorization
 - Audit logging
@@ -228,6 +238,6 @@ npm run dev
 
 ---
 
-**Last Updated**: December 2024  
-**Version**: 1.0.0  
-**Maintainer**: Development Team 
+**Last Updated**: July 2025  
+**Version**: 1.1.0  
+**Maintainer**: Calance Development Team 
