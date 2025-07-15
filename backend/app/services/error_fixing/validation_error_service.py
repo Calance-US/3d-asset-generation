@@ -45,7 +45,8 @@ class ValidationErrorService:
                     context=error_data.get("context"),
                     attempt_number=metadata.get("attempt_number", 1),
                     quality_score=metadata.get("quality_score"),
-                    provider=metadata.get("provider"),
+                    # Use provider_id, not provider string
+                    provider_id=metadata.get("provider_id"),
                 )
 
                 db.add(validation_error)
