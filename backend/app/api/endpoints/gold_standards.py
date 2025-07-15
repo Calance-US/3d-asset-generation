@@ -9,7 +9,7 @@ from app.schemas.schemas import (
     GoldStandardResponse,
     GoldStandardUpdate,
 )
-from app.services.rag import get_rag_service
+from app.services.rag import get_rag_service, RAGService
 from app.utils import (
     create_embedding_text,
     process_with_retry,
@@ -27,10 +27,10 @@ async def create_gold_standards(
         description="One or more HTML files to analyze and ingest as gold standards",
     ),
     background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
     rag_sservice=Depends(get_rag_service),
 ) -> Dict[str, Any]:
     """Create gold standards from HTML files."""
-    db: Session = SessionLocal()
     upload_id = str(uuid.uuid4())
     status_row = GoldStandardUploadStatus(
         id=upload_id, status="processing", result=None, error_message=None
@@ -41,7 +41,7 @@ async def create_gold_standards(
 
     try:
         # Process files concurrently with retry logic
-        file_tasks = [process_with_retry(file, upload_id) for file in files]
+        file_tasks = [process_with_retry(file, upload_id, db) for file in files]
         results = await asyncio.gather(*file_tasks)
 
         status_row.status = "completed"
@@ -63,8 +63,7 @@ async def create_gold_standards(
 
 
 @router.get("/status/{upload_id}")
-def get_gold_standard_upload_status(upload_id: str):
-    db: Session = SessionLocal()
+def get_gold_standard_upload_status(upload_id: str, db: Session = Depends(get_db)):
     status_row = db.query(GoldStandardUploadStatus).filter_by(id=upload_id).first()
     if not status_row:
         db.close()
@@ -83,11 +82,10 @@ def get_gold_standard_upload_status(upload_id: str):
 
 @router.get("/search", response_model=List[GoldStandardResponse])
 async def search_gold_standards(
-    query: str, top_k: int = 2, rag_service=Depends(get_rag_service)
+    query: str, top_k: int = 2, rag_service: RAGService = Depends(get_rag_service), db: Session = Depends(get_db)
 ):
     """Search for similar gold standard visualizations."""
     try:
-        db = next(get_db())
         # Create embedding text for the query using the same function
         query_embedding_text = create_embedding_text(
             llm_embedding_text=query,  # Use the query as the primary semantic content
@@ -110,9 +108,8 @@ async def search_gold_standards(
 
 
 @router.get("/", response_model=List[GoldStandardResponse])
-async def list_gold_standards(rag_service=Depends(get_rag_service)):
+async def list_gold_standards(rag_service: RAGService = Depends(get_rag_service), db: Session = Depends(get_db)):
     """List all gold standard visualizations."""
-    db = next(get_db())
     try:
         all_metadata = db.query(SnippetMetadata).all()
         return [
@@ -154,7 +151,7 @@ async def update_gold_standard(
     index: int,
     gold_standard: GoldStandardUpdate,
     db: Session = Depends(get_db),
-    rag_service=Depends(get_rag_service),
+    rag_service: RAGService = Depends(get_rag_service),
 ):
     """Update a gold standard visualization in the vector store."""
     try:
@@ -207,7 +204,7 @@ async def update_gold_standard(
 
 @router.delete("/{index}")
 async def delete_gold_standard(
-    index: int, db: Session = Depends(get_db), rag_service=Depends(get_rag_service)
+    index: int, db: Session = Depends(get_db), rag_service: RAGService = Depends(get_rag_service)
 ):
     """Delete a gold standard visualization from the vector store."""
     try:

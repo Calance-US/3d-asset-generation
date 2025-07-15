@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from app.auth.dependencies import get_current_user
 from app.config.settings import settings
 from app.database.database import create_history_entry, create_prompt, get_db
-from app.models import AsyncTask, AsyncTaskStage, User, ChatSession, ChatMessage
+from app.models import AsyncTask, AsyncTaskStage, User, ChatSession, ChatMessage, AIProvider
 from app.schemas.schemas import GenerateRequest
 from app.services.error_fixing.enhanced_error_fixing_service import (
     enhanced_error_fixing_service,
@@ -660,7 +660,7 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
             )
 
             similar_results = vector_store.similarity_search_with_score(
-                embedding, k=settings.SIMILAR_VIS_LIMIT
+                embedding, k=settings.SIMILAR_VIS_LIMIT, db=db
             )
 
             # Filter results by quality score if enabled
@@ -673,6 +673,7 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     and len(item) > 1
                     and isinstance(item[0], dict)
                     and "quality_score" in item[0]
+                    and item[0]["quality_score"] is not None
                     and item[0]["quality_score"] >= settings.CONTEXT_FILTER_MIN_QUALITY
                 ):
                     filtered_similar.append(item)
@@ -1010,6 +1011,23 @@ async def _process_visualization_generation(task_id: str, request: GenerateReque
                     validation_result_data["enhancement_strategy"] = enhancement_result.strategy_used.category.value if enhancement_result.strategy_used else None
 
                 validation_results.append(validation_result_data)
+
+                # Map provider string to provider_id for validation errors
+                provider_obj = db.query(AIProvider).filter_by(name=request.provider).first()
+                provider_id = provider_obj.id if provider_obj else None
+
+                # Save validation errors to database if enabled
+                if settings.SAVE_ALL_VALIDATION_ERRORS:
+                    error_metadata = {
+                        "prompt_id": prompt_id if 'prompt_id' in locals() else None,
+                        "attempt_number": attempt,
+                        "quality_score": current_quality_score,
+                        "provider_id": provider_id,
+                    }
+                    from app.services.error_fixing.validation_error_service import validation_error_service
+                    validation_error_service.save_validation_errors(
+                        db, validation_errors, error_metadata
+                    )
 
                 # Log detailed validation information
                 logger.info(

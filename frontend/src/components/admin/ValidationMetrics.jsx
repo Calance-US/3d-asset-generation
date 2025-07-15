@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, Typography, Grid, CircularProgress, Alert, Box, LinearProgress, Chip } from '@mui/material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { Card, CardContent, Typography, Grid, CircularProgress, Alert, Box, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
 import { BASE_URL } from '../../lib/utils';
-
-const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1'];
 
 const ValidationMetrics = () => {
   const [metrics, setMetrics] = useState(null);
@@ -12,7 +9,6 @@ const ValidationMetrics = () => {
 
   useEffect(() => {
     fetchValidationMetrics();
-    // Set up periodic refresh every 30 seconds
     const interval = setInterval(fetchValidationMetrics, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -57,257 +53,185 @@ const ValidationMetrics = () => {
     );
   }
 
-  const { validation_performance, quality_distribution, feedback_effectiveness, system_health } = metrics;
+  // Extract and fallback for all relevant fields
+  const system_health = metrics.system_health || {};
+  const validation_performance = metrics.validation_performance || {};
+  const quality_distribution = metrics.quality_distribution || {};
+  const provider_performance = metrics.provider_performance || [];
+  const phase_error_distribution = metrics.phase_error_distribution || [];
 
-  // Prepare data for charts
-  const phasePerformanceData = Object.entries(validation_performance?.phase_performance || {}).map(([phase, data]) => ({
-    phase: phase.replace('_', '/').toUpperCase(),
-    successRate: (data.success_rate * 100).toFixed(1),
-    avgTime: data.avg_time.toFixed(2),
-    count: data.count
-  }));
+  // System Health
+  const overallSuccessRate = system_health.overall_success_rate ?? 0;
+  const averageQualityScore = system_health.average_quality_score ?? 0;
+  const improvementRate = system_health.improvement_rate ?? 0;
+  const totalValidations = system_health.total_validations ?? 0;
 
-  const qualityTierData = Object.entries(quality_distribution?.tier_distribution || {}).map(([tier, count]) => ({
-    name: tier.charAt(0).toUpperCase() + tier.slice(1),
-    value: count,
-    color: tier === 'premium' ? '#8884d8' : tier === 'standard' ? '#82ca9d' : tier === 'basic' ? '#ffc658' : '#ff7300'
-  }));
+  // Validation Performance
+  const totalValidationErrors = validation_performance.total_validation_errors ?? 0;
+  const uniquePromptsValidated = validation_performance.unique_prompts_validated ?? 0;
+  const successRate = validation_performance.success_rate ?? 0;
+  const avgAttemptsPerPrompt = validation_performance.avg_attempts_per_prompt ?? 0;
+  const attemptBreakdown = validation_performance.attempt_breakdown || [];
 
-  const getTrendColor = (value) => {
-    if (value >= 0.8) return 'success';
-    if (value >= 0.6) return 'warning';
-    return 'error';
-  };
-
-  const getQualityColor = (score) => {
-    if (score >= 8) return 'success';
-    if (score >= 6) return 'warning';
-    return 'error';
-  };
+  // Quality Distribution
+  const averageScore = quality_distribution.average_score ?? 0;
+  const minScore = quality_distribution.min_score ?? 0;
+  const maxScore = quality_distribution.max_score ?? 0;
+  const scoreImprovementTrend = quality_distribution.score_improvement_trend || [];
 
   return (
     <div className="space-y-6">
-      <Typography variant="h4" component="h1" gutterBottom sx={{ color: '#fff', fontWeight: 'bold' }}>
+      <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 'bold' }}>
         Validation System Metrics
       </Typography>
 
       {/* System Health Overview */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={4}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography color="#9ca3af" gutterBottom>
-                Overall Success Rate
-              </Typography>
-              <Box display="flex" alignItems="center" gap={2}>
-                <Typography variant="h4" component="div" color={getTrendColor(system_health?.overall_success_rate || 0)}>
-                  {((system_health?.overall_success_rate || 0) * 100).toFixed(1)}%
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={(system_health?.overall_success_rate || 0) * 100}
-                  sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
-                  color={getTrendColor(system_health?.overall_success_rate || 0)}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={4}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography color="#9ca3af" gutterBottom>
-                Average Quality Score
-              </Typography>
-              <Box display="flex" alignItems="center" gap={2}>
-                <Typography variant="h4" component="div" color={getQualityColor(system_health?.average_quality_score || 0)}>
-                  {(system_health?.average_quality_score || 0).toFixed(1)}
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={(system_health?.average_quality_score || 0) * 10}
-                  sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
-                  color={getQualityColor(system_health?.average_quality_score || 0)}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={4}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography color="#9ca3af" gutterBottom>
-                Improvement Rate
-              </Typography>
-              <Box display="flex" alignItems="center" gap={2}>
-                <Typography variant="h4" component="div" color={getTrendColor(system_health?.improvement_rate || 0)}>
-                  {((system_health?.improvement_rate || 0) * 100).toFixed(1)}%
-                </Typography>
-                <LinearProgress
-                  variant="determinate"
-                  value={(system_health?.improvement_rate || 0) * 100}
-                  sx={{ flexGrow: 1, height: 8, borderRadius: 4 }}
-                  color={getTrendColor(system_health?.improvement_rate || 0)}
-                />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Validation Performance Stats */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Phase Performance
-              </Typography>
-              <Box height={300}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={phasePerformanceData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="phase" stroke="#9ca3af" />
-                    <YAxis stroke="#9ca3af" />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#374151', border: 'none', borderRadius: '8px' }}
-                      labelStyle={{ color: '#fff' }}
-                    />
-                    <Bar dataKey="successRate" fill="#8884d8" name="Success Rate (%)" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={4}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Quality Distribution
-              </Typography>
-              <Box height={300}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={qualityTierData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {qualityTierData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#374151', border: 'none', borderRadius: '8px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Detailed Performance Metrics */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Performance Details
-              </Typography>
-              <Box display="flex" flexDirection="column" gap={2}>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography color="#9ca3af">Total Validations:</Typography>
-                  <Typography>{validation_performance?.total_validations || 0}</Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography color="#9ca3af">Successful Validations:</Typography>
-                  <Typography>{validation_performance?.successful_validations || 0}</Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography color="#9ca3af">Average Validation Time:</Typography>
-                  <Typography>{(validation_performance?.average_validation_time || 0).toFixed(2)}s</Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Feedback Loop Effectiveness
-              </Typography>
-              <Box display="flex" flexDirection="column" gap={2}>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography color="#9ca3af">Learning Updates:</Typography>
-                  <Typography>{feedback_effectiveness?.learning_updates || 0}</Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography color="#9ca3af">Pattern Recognition:</Typography>
-                  <Typography>{feedback_effectiveness?.patterns_identified || 0}</Typography>
-                </Box>
-                <Box display="flex" justifyContent="space-between">
-                  <Typography color="#9ca3af">Adaptation Success:</Typography>
-                  <Typography>{((feedback_effectiveness?.adaptation_success_rate || 0) * 100).toFixed(1)}%</Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Phase-Specific Details */}
-      <Card sx={{ bgcolor: '#1f2937', color: '#fff' }}>
+      <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Phase-Specific Performance
-          </Typography>
+          <Typography variant="h6" gutterBottom>System Health</Typography>
           <Grid container spacing={2}>
-            {phasePerformanceData.map((phase) => (
-              <Grid item xs={12} sm={6} md={3} key={phase.phase}>
-                <Box
-                  p={2}
-                  bgcolor="#374151"
-                  borderRadius={1}
-                  display="flex"
-                  flexDirection="column"
-                  gap={1}
-                >
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {phase.phase}
-                  </Typography>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2" color="#9ca3af">Success Rate:</Typography>
-                    <Chip
-                      label={`${phase.successRate}%`}
-                      size="small"
-                      color={parseFloat(phase.successRate) >= 80 ? 'success' : parseFloat(phase.successRate) >= 60 ? 'warning' : 'error'}
-                    />
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2" color="#9ca3af">Avg Time:</Typography>
-                    <Typography variant="body2">{phase.avgTime}s</Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2" color="#9ca3af">Count:</Typography>
-                    <Typography variant="body2">{phase.count}</Typography>
-                  </Box>
-                </Box>
-              </Grid>
-            ))}
+            <Grid item xs={6} md={3}><b>Overall Success Rate:</b> {overallSuccessRate.toFixed(1)}%</Grid>
+            <Grid item xs={6} md={3}><b>Average Quality Score:</b> {averageQualityScore.toFixed(1)}</Grid>
+            <Grid item xs={6} md={3}><b>Improvement Rate:</b> {improvementRate.toFixed(1)}%</Grid>
+            <Grid item xs={6} md={3}><b>Total Validations:</b> {totalValidations}</Grid>
           </Grid>
+        </CardContent>
+      </Card>
+
+      {/* Validation Performance */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>Validation Performance</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={6} md={3}><b>Total Validation Errors:</b> {totalValidationErrors}</Grid>
+            <Grid item xs={6} md={3}><b>Unique Prompts Validated:</b> {uniquePromptsValidated}</Grid>
+            <Grid item xs={6} md={3}><b>Success Rate:</b> {successRate.toFixed(1)}%</Grid>
+            <Grid item xs={6} md={3}><b>Avg Attempts/Prompt:</b> {avgAttemptsPerPrompt.toFixed(2)}</Grid>
+          </Grid>
+          <Box mt={2}>
+            <Typography variant="subtitle1">Attempt Breakdown</Typography>
+            <TableContainer component={Paper} sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Attempt</TableCell>
+                    <TableCell>Total Attempts</TableCell>
+                    <TableCell>Critical Errors</TableCell>
+                    <TableCell>Avg Quality Score</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {attemptBreakdown.length > 0 ? attemptBreakdown.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{row.attempt}</TableCell>
+                      <TableCell>{row.total_attempts}</TableCell>
+                      <TableCell>{row.critical_errors}</TableCell>
+                      <TableCell>{row.avg_quality_score.toFixed(2)}</TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow><TableCell colSpan={4}>No attempt breakdown data.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Quality Distribution */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>Quality Distribution</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={4}><b>Average Score:</b> {averageScore.toFixed(2)}</Grid>
+            <Grid item xs={4}><b>Min Score:</b> {minScore.toFixed(2)}</Grid>
+            <Grid item xs={4}><b>Max Score:</b> {maxScore.toFixed(2)}</Grid>
+          </Grid>
+          <Box mt={2}>
+            <Typography variant="subtitle1">Score Improvement Trend</Typography>
+            <TableContainer component={Paper} sx={{ mt: 1 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Attempt</TableCell>
+                    <TableCell>Avg Score</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {scoreImprovementTrend.length > 0 ? scoreImprovementTrend.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{row.attempt}</TableCell>
+                      <TableCell>{row.avg_score.toFixed(2)}</TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow><TableCell colSpan={2}>No score improvement data.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Provider Performance */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>Provider Performance</Typography>
+          <TableContainer component={Paper} sx={{ mt: 1 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Provider</TableCell>
+                  <TableCell>Total Errors</TableCell>
+                  <TableCell>Avg Quality</TableCell>
+                  <TableCell>Unique Prompts</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {provider_performance.length > 0 ? provider_performance.map((row, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{row.provider}</TableCell>
+                    <TableCell>{row.total_errors}</TableCell>
+                    <TableCell>{row.avg_quality.toFixed(2)}</TableCell>
+                    <TableCell>{row.unique_prompts}</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={4}>No provider performance data.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
+
+      {/* Phase Error Distribution */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>Phase Error Distribution</Typography>
+          <TableContainer component={Paper} sx={{ mt: 1 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Phase</TableCell>
+                  <TableCell>Total Errors</TableCell>
+                  <TableCell>Critical Errors</TableCell>
+                  <TableCell>Error Rate (%)</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {phase_error_distribution.length > 0 ? phase_error_distribution.map((row, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{row.phase}</TableCell>
+                    <TableCell>{row.total_errors}</TableCell>
+                    <TableCell>{row.critical_errors}</TableCell>
+                    <TableCell>{row.error_rate.toFixed(1)}%</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={4}>No phase error distribution data.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </CardContent>
       </Card>
 

@@ -208,12 +208,13 @@ async def get_validation_metrics(
         # Provider performance
         provider_stats_query = text("""
             SELECT
-                provider,
+                p.name as provider,
                 COUNT(*) as total_errors,
-                AVG(quality_score::numeric) as avg_quality,
-                COUNT(DISTINCT prompt_id) as unique_prompts
-            FROM validation_errors
-            GROUP BY provider
+                AVG(ve.quality_score::numeric) as avg_quality,
+                COUNT(DISTINCT ve.prompt_id) as unique_prompts
+            FROM validation_errors ve
+            JOIN ai_providers p ON ve.provider_id = p.id
+            GROUP BY p.name
         """)
         provider_stats = db.execute(provider_stats_query).fetchall()
 

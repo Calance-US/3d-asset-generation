@@ -123,14 +123,15 @@ class VectorStore:
             return False
 
     def similarity_search_with_score(
-        self, query_embedding: np.ndarray, k: int = 5
+        self, query_embedding: np.ndarray, k: int = 5, db=None
     ) -> list[tuple[dict, float]]:
         """
-        Search for similar embeddings and return results with similarity scores.
+        Search for similar embeddings and return results with similarity scores and full metadata from DB.
 
         Args:
             query_embedding: The query embedding vector
             k: Number of results to return
+            db: SQLAlchemy session for metadata lookup
 
         Returns:
             List of tuples containing (metadata_dict, similarity_score)
@@ -150,14 +151,47 @@ class VectorStore:
                 limit=k,
             )
 
-            # Convert to the expected format
+            qdrant_ids = [int(hit.id) for hit in search_result]
+            # Fetch full metadata from DB
+            meta_map = {}
+            if db is not None and qdrant_ids:
+                results = (
+                    db.query(SnippetMetadata)
+                    .filter(SnippetMetadata.faiss_id.in_(qdrant_ids))
+                    .all()
+                )
+                for m in results:
+                    meta_map[m.faiss_id] = {
+                        k: v
+                        for k, v in m.__dict__.items()
+                        if not k.startswith("_sa_instance_state")
+                    }
+
             results = []
             for hit in search_result:
-                metadata = {
-                    "id": int(hit.id),
-                    "faiss_id": int(hit.id),
+                faiss_id = int(hit.id)
+                metadata = meta_map.get(faiss_id, {
+                    "id": faiss_id,
+                    "faiss_id": faiss_id,
                     "score": float(hit.score),
-                }
+                })
+                # Ensure 'quality_score' is always present
+                if "quality_score" not in metadata:
+                    # Try to get from the SQLAlchemy object if available
+                    obj = None
+                    if db is not None and faiss_id in meta_map:
+                        obj = db.query(SnippetMetadata).filter(SnippetMetadata.faiss_id == faiss_id).first()
+                    if obj is not None and hasattr(obj, "quality_score"):
+                        val = getattr(obj, "quality_score")
+                        # Convert Decimal to float if needed
+                        if val is not None:
+                            try:
+                                val = float(val)
+                            except Exception:
+                                pass
+                        metadata["quality_score"] = val
+                    else:
+                        metadata["quality_score"] = None
                 results.append((metadata, float(hit.score)))
 
             logger.info(f"[similarity_search_with_score] Found {len(results)} results")
