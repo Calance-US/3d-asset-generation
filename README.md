@@ -290,3 +290,46 @@ This will:
 ## License
 
 MIT License
+
+---
+
+## Optional: Code Quality Analysis with SonarQube
+
+You can optionally run static code analysis and code coverage checks using SonarQube. This is recommended for contributors who want to check code quality and test coverage locally before submitting changes.
+
+### **Step 1: Run SonarQube Server (Docker)**
+
+```bash
+docker run -d --name sonarqube \
+  -p 9000:9000 \
+  -e SONAR_ES_BOOTSTRAP_CHECKS_DISABLE=true \
+  sonarqube:community
+```
+- Access the UI at: http://localhost:9000 (default login: `admin` / `admin`)
+
+### **Step 2: Install SonarScanner CLI**
+
+- [Download SonarScanner CLI](https://docs.sonarsource.com/sonarqube/latest/analyzing-source-code/scanners/sonarscanner/)
+- Or, on Mac with Homebrew:
+  ```bash
+  brew install sonar-scanner
+  ```
+
+### **Step 3: Configure Project**
+
+- The repo includes a `sonar-project.example.properties` file in the backend directory. Rename to `sonar-project.properties` and edit as needed for your environment.
+
+### **Step 4: Run SonarScanner**
+
+```bash
+sonar-scanner
+```
+
+### **Step 7: View Results**
+
+- Go to http://localhost:9000 and find your project.
+- Review code smells, bugs, dead code, and coverage.
+
+---
+
+**Note:** SonarQube integration is optional and not required for local development or PRs, but is recommended for code quality best practices.
